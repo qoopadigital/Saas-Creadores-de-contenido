@@ -6,7 +6,6 @@ import { z } from "zod";
 
 // ---- Schema ----
 const profileSchema = z.object({
-    full_name: z.string().min(2, "El nombre debe tener al menos 2 caracteres").optional(),
     username: z
         .string()
         .min(3, "El username debe tener al menos 3 caracteres")
@@ -25,31 +24,12 @@ const profileSchema = z.object({
         .url("Debe ser una URL válida")
         .optional()
         .or(z.literal("")),
+
+    // New fields
+    selected_template: z.literal("simple").optional(),
+    social_links: z.record(z.string(), z.string().optional()).optional(), // { instagram: 'user', ... }
+    featured_content: z.array(z.string().url("Debe ser una URL válida")).optional(),
 });
-
-export async function getProfile() {
-    const supabase = await createClient();
-
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-        return { data: null, error: "No autenticado" };
-    }
-
-    const { data, error } = await supabase
-        .from("profiles")
-        .select("id, email, username, full_name, bio, avatar_url, role")
-        .eq("id", user.id)
-        .single();
-
-    if (error) {
-        return { data: null, error: error.message };
-    }
-
-    return { data, error: null };
-}
 
 export async function updateProfile(formData: FormData) {
     const supabase = await createClient();
@@ -62,13 +42,29 @@ export async function updateProfile(formData: FormData) {
         return { error: "No autenticado" };
     }
 
-    // Prepare data object for Zod validation
-    // We only pass fields that are present in the FormData
+    // Prepare data for validation
     const rawData: Record<string, unknown> = {};
-    if (formData.has("full_name")) rawData.full_name = formData.get("full_name");
     if (formData.has("username")) rawData.username = formData.get("username");
     if (formData.has("bio")) rawData.bio = formData.get("bio");
     if (formData.has("avatar_url")) rawData.avatar_url = formData.get("avatar_url");
+    if (formData.has("selected_template")) rawData.selected_template = formData.get("selected_template");
+
+    // Parse JSON fields
+    if (formData.has("social_links")) {
+        try {
+            rawData.social_links = JSON.parse(formData.get("social_links") as string);
+        } catch {
+            return { error: "Formato de redes sociales inválido" };
+        }
+    }
+
+    if (formData.has("featured_content")) {
+        try {
+            rawData.featured_content = JSON.parse(formData.get("featured_content") as string);
+        } catch {
+            return { error: "Formato de contenido destacado inválido" };
+        }
+    }
 
     // Validate
     const parsed = profileSchema.safeParse(rawData);
@@ -78,15 +74,17 @@ export async function updateProfile(formData: FormData) {
     }
 
     // Build update payload
-    const updateData: Record<string, string> = {};
-    if (parsed.data.full_name !== undefined) updateData.full_name = parsed.data.full_name;
+    const updateData: Record<string, any> = {};
     if (parsed.data.username !== undefined) updateData.username = parsed.data.username;
-    // Handle optional text fields allowing empty strings
     if (parsed.data.bio !== undefined) updateData.bio = parsed.data.bio || "";
     if (parsed.data.avatar_url !== undefined) updateData.avatar_url = parsed.data.avatar_url || "";
 
+    if (parsed.data.selected_template !== undefined) updateData.selected_template = parsed.data.selected_template;
+    if (parsed.data.social_links !== undefined) updateData.social_links = parsed.data.social_links;
+    if (parsed.data.featured_content !== undefined) updateData.featured_content = parsed.data.featured_content;
+
     if (Object.keys(updateData).length === 0) {
-        return { success: true }; // Nothing to update
+        return { success: true };
     }
 
     // Update
@@ -96,14 +94,12 @@ export async function updateProfile(formData: FormData) {
         .eq("id", user.id);
 
     if (error) {
-        // PostgreSQL unique violation (code 23505)
         if (error.code === "23505") {
             return { error: "Este nombre de usuario ya está en uso" };
         }
         return { error: error.message };
     }
 
-    revalidatePath("/dashboard/settings");
     revalidatePath("/dashboard/public-profile");
     if (parsed.data.username) {
         revalidatePath(`/${parsed.data.username}`);

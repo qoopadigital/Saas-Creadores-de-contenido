@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createCampaign } from "@/app/(dashboard)/dashboard/campaigns/actions";
+import { updateCampaign } from "@/app/(dashboard)/dashboard/campaigns/actions";
 import { ColorTagsInput } from "@/components/ui/color-tags-input";
+import type { CampaignData } from "./card";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +21,6 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from "@/components/ui/dialog";
 
 // ---- Schema ----
@@ -34,69 +34,79 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-export function CreateCampaignDialog() {
-    const [open, setOpen] = useState(false);
+interface EditCampaignDialogProps {
+    campaign: CampaignData;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}
+
+export function EditCampaignDialog({
+    campaign,
+    open,
+    onOpenChange,
+}: EditCampaignDialogProps) {
     const [isLoading, setIsLoading] = useState(false);
 
     const {
         register,
         handleSubmit,
-        reset,
         control,
         formState: { errors },
     } = useForm<FormValues>({
         resolver: zodResolver(formSchema),
-        defaultValues: { tags: [] },
+        defaultValues: {
+            title: campaign.title,
+            brand_name: campaign.brand_name,
+            budget: String(campaign.budget),
+            deadline: campaign.deadline
+                ? new Date(campaign.deadline).toISOString().split("T")[0]
+                : "",
+            tags: campaign.tags || [],
+        },
     });
 
     async function onSubmit(data: FormValues) {
         setIsLoading(true);
 
         const formData = new FormData();
+        formData.append("id", campaign.id);
         formData.append("title", data.title);
         formData.append("brand_name", data.brand_name);
         formData.append("budget", data.budget);
         formData.append("deadline", data.deadline);
+        formData.append("status", campaign.status);
         formData.append("tags", JSON.stringify(data.tags || []));
 
-        const result = await createCampaign(formData);
+        const result = await updateCampaign(formData);
 
         if (result?.error) {
-            toast.error("Error al crear la campaña", {
+            toast.error("Error al actualizar la campaña", {
                 description: result.error,
             });
         } else {
-            toast.success("Campaña creada exitosamente");
-            reset();
-            setOpen(false);
+            toast.success("Campaña actualizada exitosamente");
+            onOpenChange(false);
         }
 
         setIsLoading(false);
     }
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Nueva Campaña
-                </Button>
-            </DialogTrigger>
-
+        <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[480px]">
                 <DialogHeader>
-                    <DialogTitle>Crear Nueva Campaña</DialogTitle>
+                    <DialogTitle>Editar Campaña</DialogTitle>
                     <DialogDescription>
-                        Completa los datos para registrar una nueva campaña.
+                        Modifica los datos de la campaña.
                     </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
                     {/* Title */}
                     <div className="space-y-2">
-                        <Label htmlFor="title">Título de la Campaña</Label>
+                        <Label htmlFor="edit-title">Título de la Campaña</Label>
                         <Input
-                            id="title"
+                            id="edit-title"
                             placeholder="Ej: Campaña de Verano"
                             disabled={isLoading}
                             {...register("title")}
@@ -110,9 +120,9 @@ export function CreateCampaignDialog() {
 
                     {/* Brand */}
                     <div className="space-y-2">
-                        <Label htmlFor="brand_name">Marca</Label>
+                        <Label htmlFor="edit-brand_name">Marca</Label>
                         <Input
-                            id="brand_name"
+                            id="edit-brand_name"
                             placeholder="Ej: Nike"
                             disabled={isLoading}
                             {...register("brand_name")}
@@ -126,9 +136,9 @@ export function CreateCampaignDialog() {
 
                     {/* Budget */}
                     <div className="space-y-2">
-                        <Label htmlFor="budget">Presupuesto ($)</Label>
+                        <Label htmlFor="edit-budget">Presupuesto ($)</Label>
                         <Input
-                            id="budget"
+                            id="edit-budget"
                             type="number"
                             placeholder="1000"
                             disabled={isLoading}
@@ -143,9 +153,9 @@ export function CreateCampaignDialog() {
 
                     {/* Deadline */}
                     <div className="space-y-2">
-                        <Label htmlFor="deadline">Fecha Límite</Label>
+                        <Label htmlFor="edit-deadline">Fecha Límite</Label>
                         <Input
-                            id="deadline"
+                            id="edit-deadline"
                             type="date"
                             disabled={isLoading}
                             {...register("deadline")}
@@ -156,6 +166,8 @@ export function CreateCampaignDialog() {
                             </p>
                         )}
                     </div>
+
+
 
                     {/* Tags */}
                     <div className="space-y-2">
@@ -176,7 +188,7 @@ export function CreateCampaignDialog() {
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={() => setOpen(false)}
+                            onClick={() => onOpenChange(false)}
                             disabled={isLoading}
                         >
                             Cancelar
@@ -185,11 +197,11 @@ export function CreateCampaignDialog() {
                             {isLoading && (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             )}
-                            Crear Campaña
+                            Guardar Cambios
                         </Button>
                     </DialogFooter>
                 </form>
             </DialogContent>
-        </Dialog>
+        </Dialog >
     );
 }

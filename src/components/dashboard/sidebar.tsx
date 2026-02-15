@@ -9,6 +9,7 @@ import {
     Users,
     Settings,
     LogOut,
+    LayoutTemplate,
 } from "lucide-react";
 
 import { signOut } from "@/app/(auth)/actions";
@@ -22,7 +23,7 @@ interface NavItem {
     agencyOnly?: boolean;
 }
 
-const navItems: NavItem[] = [
+const mainNavItems: NavItem[] = [
     {
         label: "Dashboard",
         href: "/dashboard",
@@ -45,6 +46,14 @@ const navItems: NavItem[] = [
         agencyOnly: true,
     },
     {
+        label: "Perfil Público",
+        href: "/dashboard/public-profile",
+        icon: LayoutTemplate,
+    },
+];
+
+const footerNavItems: NavItem[] = [
+    {
         label: "Configuración",
         href: "/dashboard/settings",
         icon: Settings,
@@ -58,7 +67,7 @@ interface SidebarProps {
 export function Sidebar({ userRole }: SidebarProps) {
     const pathname = usePathname();
 
-    const filteredItems = navItems.filter(
+    const filteredMainItems = mainNavItems.filter(
         (item) => !item.agencyOnly || userRole === "agency"
     );
 
@@ -72,9 +81,9 @@ export function Sidebar({ userRole }: SidebarProps) {
                 <span className="text-lg font-semibold tracking-tight">CreatorOS</span>
             </div>
 
-            {/* Navigation */}
+            {/* Main Navigation */}
             <nav className="flex-1 space-y-1 px-3 py-4">
-                {filteredItems.map((item) => {
+                {filteredMainItems.map((item) => {
                     const isActive =
                         pathname === item.href ||
                         (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -97,8 +106,27 @@ export function Sidebar({ userRole }: SidebarProps) {
                 })}
             </nav>
 
-            {/* Sign Out */}
-            <div className="border-t border-border p-3">
+            {/* Footer Navigation (Settings & Sign Out) */}
+            <div className="mt-auto border-t border-border p-3 space-y-1">
+                {footerNavItems.map((item) => {
+                    const isActive = pathname === item.href;
+                    return (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className={cn(
+                                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                                isActive
+                                    ? "bg-primary text-primary-foreground"
+                                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                            )}
+                        >
+                            <item.icon className="h-4 w-4" />
+                            {item.label}
+                        </Link>
+                    );
+                })}
+
                 <form action={signOut}>
                     <Button
                         type="submit"

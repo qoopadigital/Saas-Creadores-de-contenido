@@ -34,9 +34,6 @@ export default async function SettingsPage() {
             <SettingsForm
                 profile={{
                     full_name: profile?.full_name ?? "",
-                    username: profile?.username ?? "",
-                    bio: profile?.bio ?? "",
-                    avatar_url: profile?.avatar_url ?? "",
                     email: profile?.email ?? user.email ?? "",
                 }}
             />

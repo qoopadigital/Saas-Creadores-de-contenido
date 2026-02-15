@@ -32,6 +32,17 @@ export interface Profile {
     agency_id: string | null;
     created_at: string;
     updated_at: string;
+    selected_template: string; // 'simple' | ...
+    social_links: {
+        instagram?: string;
+        tiktok?: string;
+        youtube?: string;
+        twitter?: string;
+        linkedin?: string;
+        // ... allow other keys
+        [key: string]: string | undefined;
+    } | null;
+    featured_content: string[] | null; // Array of URLs
 }
 
 export interface Agency {

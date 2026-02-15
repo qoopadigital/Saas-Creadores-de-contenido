@@ -106,6 +106,16 @@ export function KanbanBoard({ initialCampaigns }: KanbanBoardProps) {
         }
     }
 
+    function handleDeleteCard(id: string) {
+        setColumns((prev) => {
+            const next = { ...prev };
+            for (const colId of Object.keys(next) as ColumnId[]) {
+                next[colId] = next[colId].filter((c) => c.id !== id);
+            }
+            return next;
+        });
+    }
+
     if (!mounted) {
         return (
             <div className="grid grid-cols-5 gap-4">
@@ -152,6 +162,7 @@ export function KanbanBoard({ initialCampaigns }: KanbanBoardProps) {
                                             key={campaign.id}
                                             campaign={campaign}
                                             index={index}
+                                            onDelete={handleDeleteCard}
                                         />
                                     ))}
                                     {provided.placeholder}
