@@ -5,6 +5,7 @@ import {
     CardDescription,
     CardHeader,
     CardTitle,
+    CardFooter,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,8 +16,11 @@ import {
     ArrowRight,
     Plus,
     Clock,
+    TrendingUp,
+    TrendingDown,
+    CreditCard,
 } from "lucide-react";
-import { getDashboardOverview } from "./actions";
+import { getDashboardOverview, getRecentExpenses } from "./actions";
 
 function formatCurrency(amount: number) {
     return new Intl.NumberFormat("es-CO", {
@@ -51,13 +55,26 @@ const statusColors: Record<string, "default" | "secondary" | "outline"> = {
     completed: "default",
 };
 
-export default async function DashboardPage() {
-    const { data, error } = await getDashboardOverview();
+const CATEGORY_ICONS: Record<string, any> = {
+    production: "🎥",
+    travel: "✈️",
+    agency_fee: "🏢",
+    software: "💻",
+    equipment: "📸",
+    tax: "🏦",
+    other: "📦",
+};
 
-    const activeCampaigns = data?.activeCampaignsCount ?? 0;
-    const monthlyRevenue = data?.monthlyRevenue ?? 0;
-    const teamMembers = data?.teamMembers ?? 1;
-    const lastCampaigns = data?.lastCampaigns ?? [];
+export default async function DashboardPage() {
+    const { data: overviewData, error: overviewError } = await getDashboardOverview();
+    const recentExpenses = await getRecentExpenses();
+
+    const activeCampaigns = overviewData?.activeCampaignsCount ?? 0;
+    const monthlyRevenue = overviewData?.monthlyRevenue ?? 0;
+    const monthlyExpenses = overviewData?.monthlyExpenses ?? 0;
+    const netProfit = overviewData?.netProfit ?? 0;
+    const teamMembers = overviewData?.teamMembers ?? 1;
+    const lastCampaigns = overviewData?.lastCampaigns ?? [];
 
     const summaryCards = [
         {
@@ -72,15 +89,26 @@ export default async function DashboardPage() {
             bgColor: "bg-blue-500/10",
         },
         {
-            title: "Ingresos del Mes",
-            value: formatCurrency(monthlyRevenue),
-            description:
-                monthlyRevenue > 0
-                    ? "Campañas completadas este mes"
-                    : "Sin ingresos registrados este mes",
+            title: "Beneficio Neto (Mes)",
+            value: formatCurrency(netProfit),
+            description: null,
+            footer: (
+                <div className="flex items-center text-xs text-muted-foreground gap-2 mt-1">
+                    <span className="flex items-center text-emerald-600">
+                        <TrendingUp className="h-3 w-3 mr-1" />
+                        {formatCurrency(monthlyRevenue)}
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center text-rose-600">
+                        <TrendingDown className="h-3 w-3 mr-1" />
+                        {formatCurrency(monthlyExpenses)}
+                    </span>
+                </div>
+            ),
             icon: DollarSign,
-            color: "text-emerald-500",
-            bgColor: "bg-emerald-500/10",
+            color: netProfit >= 0 ? "text-emerald-500" : "text-rose-500",
+            bgColor: netProfit >= 0 ? "bg-emerald-500/10" : "bg-rose-500/10",
+            valueColor: netProfit < 0 ? "text-rose-600" : undefined,
         },
         {
             title: "Miembros del Equipo",
@@ -113,9 +141,9 @@ export default async function DashboardPage() {
             </div>
 
             {/* Error */}
-            {error && (
+            {overviewError && (
                 <div className="rounded-md border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                    Error al cargar datos: {error}
+                    Error al cargar datos: {overviewError}
                 </div>
             )}
 
@@ -132,86 +160,134 @@ export default async function DashboardPage() {
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{card.value}</div>
-                            <CardDescription className="mt-1">
-                                {card.description}
-                            </CardDescription>
+                            <div className={`text-2xl font-bold ${card.valueColor || ""}`}>
+                                {card.value}
+                            </div>
+                            {card.description && (
+                                <CardDescription className="mt-1">
+                                    {card.description}
+                                </CardDescription>
+                            )}
+                            {card.footer && card.footer}
                         </CardContent>
                     </Card>
                 ))}
             </div>
 
-            {/* Recent Activity */}
-            <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle className="text-base">Actividad Reciente</CardTitle>
-                        <CardDescription>
-                            Últimas campañas actualizadas
-                        </CardDescription>
-                    </div>
-                    <Link href="/dashboard/campaigns">
-                        <Button variant="ghost" size="sm" className="gap-1">
-                            Ver todas
-                            <ArrowRight className="h-4 w-4" />
-                        </Button>
-                    </Link>
-                </CardHeader>
-                <CardContent>
-                    {lastCampaigns.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-8 text-center">
-                            <div className="rounded-full bg-muted p-3 mb-3">
-                                <Kanban className="h-6 w-6 text-muted-foreground" />
-                            </div>
-                            <p className="text-sm font-medium text-muted-foreground">
-                                No hay campañas aún
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1 mb-4">
-                                Crea tu primera campaña para empezar a rastrear tu actividad
-                            </p>
-                            <Link href="/dashboard/campaigns">
-                                <Button size="sm">
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Crear Campaña
-                                </Button>
-                            </Link>
+            {/* Activity & Expenses Split */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                {/* Recent Activity (2/3) */}
+                <Card className="lg:col-span-2">
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                            <CardTitle className="text-base">Actividad Reciente</CardTitle>
+                            <CardDescription>
+                                Últimas campañas actualizadas
+                            </CardDescription>
                         </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {lastCampaigns.map((campaign) => (
-                                <div
-                                    key={campaign.id}
-                                    className="flex items-center justify-between rounded-lg border border-border p-3"
-                                >
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-medium truncate">
-                                            {campaign.title}
-                                        </p>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-xs text-muted-foreground">
-                                                {campaign.brand_name}
+                        <Link href="/dashboard/campaigns">
+                            <Button variant="ghost" size="sm" className="gap-1">
+                                Ver todas
+                                <ArrowRight className="h-4 w-4" />
+                            </Button>
+                        </Link>
+                    </CardHeader>
+                    <CardContent>
+                        {lastCampaigns.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-8 text-center">
+                                <div className="rounded-full bg-muted p-3 mb-3">
+                                    <Kanban className="h-6 w-6 text-muted-foreground" />
+                                </div>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                    No hay campañas aún
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1 mb-4">
+                                    Crea tu primera campaña para empezar a rastrear tu actividad
+                                </p>
+                                <Link href="/dashboard/campaigns">
+                                    <Button size="sm">
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Crear Campaña
+                                    </Button>
+                                </Link>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {lastCampaigns.map((campaign) => (
+                                    <div
+                                        key={campaign.id}
+                                        className="flex items-center justify-between border-b last:border-0 pb-3 last:pb-0"
+                                    >
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium truncate">
+                                                {campaign.title}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-xs text-muted-foreground font-medium">
+                                                    {campaign.brand_name}
+                                                </span>
+                                                <span className="text-xs text-muted-foreground">·</span>
+                                                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" />
+                                                    {formatDate(campaign.updated_at)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 ml-4">
+                                            <span className="text-sm font-medium">
+                                                {formatCurrency(campaign.budget)}
                                             </span>
-                                            <span className="text-xs text-muted-foreground">·</span>
-                                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                                <Clock className="h-3 w-3" />
-                                                {formatDate(campaign.updated_at)}
-                                            </span>
+                                            <Badge variant={statusColors[campaign.status] ?? "outline"}>
+                                                {statusLabels[campaign.status] ?? campaign.status}
+                                            </Badge>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3 ml-4">
-                                        <span className="text-sm font-medium">
-                                            {formatCurrency(campaign.budget)}
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Recent Expenses (1/3) */}
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                        <CardTitle className="text-base">Gastos Recientes</CardTitle>
+                        <Link href="/dashboard/finance">
+                            <Button variant="ghost" size="sm" className="h-8 text-xs">
+                                Ver todo
+                            </Button>
+                        </Link>
+                    </CardHeader>
+                    <CardContent>
+                        {recentExpenses.length === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground text-sm">
+                                <CreditCard className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                No hay gastos recientes
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {recentExpenses.map((expense) => (
+                                    <div key={expense.id} className="flex items-center justify-between text-sm">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-base">
+                                                {CATEGORY_ICONS[expense.category] || "📦"}
+                                            </div>
+                                            <div className="truncate">
+                                                <p className="font-medium truncate">{expense.description}</p>
+                                                <p className="text-xs text-muted-foreground">{formatDate(expense.date)}</p>
+                                            </div>
+                                        </div>
+                                        <span className="font-medium text-destructive whitespace-nowrap ml-2">
+                                            -{formatCurrency(expense.amount)}
                                         </span>
-                                        <Badge variant={statusColors[campaign.status] ?? "outline"}>
-                                            {statusLabels[campaign.status] ?? campaign.status}
-                                        </Badge>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }

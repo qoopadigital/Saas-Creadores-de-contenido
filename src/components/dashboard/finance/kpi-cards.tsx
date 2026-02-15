@@ -1,10 +1,11 @@
-import { DollarSign, Clock, TrendingUp } from "lucide-react";
+import { DollarSign, Clock, TrendingDown, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface KpiCardsProps {
     totalRevenue: number;
     pendingAmount: number;
-    pipelineValue: number;
+    totalExpenses: number;
+    netProfit: number;
 }
 
 function formatCurrency(amount: number) {
@@ -15,45 +16,48 @@ function formatCurrency(amount: number) {
     }).format(amount);
 }
 
-const cards = [
-    {
-        key: "revenue" as const,
-        title: "Ingresos Totales",
-        icon: DollarSign,
-        color: "text-emerald-500",
-        bgColor: "bg-emerald-500/10",
-    },
-    {
-        key: "pending" as const,
-        title: "Pendiente de Cobro",
-        icon: Clock,
-        color: "text-amber-500",
-        bgColor: "bg-amber-500/10",
-    },
-    {
-        key: "pipeline" as const,
-        title: "En Pipeline",
-        icon: TrendingUp,
-        color: "text-blue-500",
-        bgColor: "bg-blue-500/10",
-    },
-];
-
 export function KpiCards({
     totalRevenue,
     pendingAmount,
-    pipelineValue,
+    totalExpenses,
+    netProfit,
 }: KpiCardsProps) {
-    const values: Record<string, number> = {
-        revenue: totalRevenue,
-        pending: pendingAmount,
-        pipeline: pipelineValue,
-    };
+    const cards = [
+        {
+            title: "Ingresos Cobrados",
+            value: totalRevenue,
+            icon: Wallet,
+            color: "text-emerald-500",
+            bgColor: "bg-emerald-500/10",
+        },
+        {
+            title: "Gastos Totales",
+            value: totalExpenses,
+            icon: TrendingDown,
+            color: "text-rose-500",
+            bgColor: "bg-rose-500/10",
+        },
+        {
+            title: "Beneficio Neto",
+            value: netProfit,
+            icon: DollarSign,
+            color: "text-emerald-700",
+            bgColor: "bg-emerald-500/20",
+            isBold: true,
+        },
+        {
+            title: "Pendiente de Cobro",
+            value: pendingAmount,
+            icon: Clock,
+            color: "text-amber-500",
+            bgColor: "bg-amber-500/10",
+        },
+    ];
 
     return (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {cards.map((card) => (
-                <Card key={card.key}>
+                <Card key={card.title}>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-sm font-medium text-muted-foreground">
                             {card.title}
@@ -63,7 +67,9 @@ export function KpiCards({
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-2xl font-bold">{formatCurrency(values[card.key])}</p>
+                        <div className={`text-2xl font-bold ${card.isBold ? "text-emerald-900 dark:text-emerald-400" : ""}`}>
+                            {formatCurrency(card.value)}
+                        </div>
                     </CardContent>
                 </Card>
             ))}

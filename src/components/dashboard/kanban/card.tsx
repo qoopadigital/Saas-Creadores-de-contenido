@@ -38,6 +38,13 @@ export interface CampaignData {
     deadline: string;
     status: string;
     tags?: string[];
+    // Financials
+    payment_status?: string;
+    invoice_date?: string | null;
+    invoice_number?: string | null;
+    payment_method?: string | null;
+    actual_hours?: number | null;
+    total_expenses?: number;
 }
 
 interface KanbanCardProps {
@@ -60,6 +67,8 @@ function formatDate(dateStr: string) {
         day: "numeric",
     });
 }
+
+import { Clock, DollarSign, FileText } from "lucide-react"; // Start adding imports
 
 export function KanbanCard({ campaign, index, onDelete }: KanbanCardProps) {
     const [editOpen, setEditOpen] = useState(false);
@@ -161,16 +170,45 @@ export function KanbanCard({ campaign, index, onDelete }: KanbanCardProps) {
                                     {campaign.title}
                                 </p>
                             </CardContent>
-                            <CardFooter className="px-3 py-2 pt-0 flex items-center justify-between gap-2">
-                                <span className="text-xs font-medium text-primary">
-                                    {formatCurrency(campaign.budget)}
-                                </span>
-                                {campaign.deadline && (
-                                    <Badge variant="secondary" className="text-xs gap-1 font-normal">
-                                        <CalendarDays className="h-3 w-3" />
-                                        {formatDate(campaign.deadline)}
-                                    </Badge>
-                                )}
+                            <CardFooter className="px-3 py-2 pt-0 flex flex-col gap-2 items-start">
+                                <div className="flex w-full items-center justify-between">
+                                    <span className="text-xs font-medium text-primary">
+                                        {formatCurrency(campaign.budget)}
+                                    </span>
+                                    {campaign.deadline && (
+                                        <Badge variant="secondary" className="text-xs gap-1 font-normal">
+                                            <CalendarDays className="h-3 w-3" />
+                                            {formatDate(campaign.deadline)}
+                                        </Badge>
+                                    )}
+                                </div>
+
+                                {/* Financial Indicators */}
+                                <div className="flex items-center gap-2 w-full mt-1 flex-wrap">
+                                    {/* Invoice Badge */}
+                                    {(campaign.invoice_date || campaign.invoice_number) && (
+                                        <Badge variant="outline" className="text-[10px] h-5 px-1.5 gap-1 text-blue-600 border-blue-200 bg-blue-50" title={campaign.invoice_date ? `Facturado: ${formatDate(campaign.invoice_date)}` : "Facturado"}>
+                                            <FileText className="h-3 w-3" />
+                                            <span>{campaign.invoice_number ? `#${campaign.invoice_number}` : "Facturado"}</span>
+                                        </Badge>
+                                    )}
+
+                                    {/* Hours Badge */}
+                                    {campaign.actual_hours && campaign.actual_hours > 0 && (
+                                        <Badge variant="secondary" className="text-[10px] h-5 px-1.5 gap-1 font-normal bg-muted text-muted-foreground hover:bg-muted" title="Horas Reales">
+                                            <Clock className="h-3 w-3" />
+                                            <span>{campaign.actual_hours}h</span>
+                                        </Badge>
+                                    )}
+
+                                    {/* Expenses Indicator (Compact) */}
+                                    {campaign.total_expenses && campaign.total_expenses > 0 ? (
+                                        <div className="flex items-center gap-1 text-[10px] text-destructive font-medium ml-auto" title="Gastos Totales">
+                                            <DollarSign className="h-3 w-3" />
+                                            <span>-{formatCurrency(campaign.total_expenses)}</span>
+                                        </div>
+                                    ) : null}
+                                </div>
                             </CardFooter>
                         </Card>
                     </div>

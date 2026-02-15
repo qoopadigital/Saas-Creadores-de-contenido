@@ -15,6 +15,24 @@ export enum CampaignStatus {
     PAUSED = "paused",
     COMPLETED = "completed",
     CANCELLED = "cancelled",
+    PAID = "paid",
+}
+
+export enum PaymentStatus {
+    PENDING = "pending",
+    INVOICED = "invoiced",
+    PAID = "paid",
+    OVERDUE = "overdue",
+}
+
+export enum ExpenseCategory {
+    PRODUCTION = "production",
+    TRAVEL = "travel",
+    AGENCY_FEE = "agency_fee",
+    SOFTWARE = "software",
+    EQUIPMENT = "equipment",
+    TAX = "tax",
+    OTHER = "other",
 }
 
 // ============================================
@@ -65,6 +83,29 @@ export interface Campaign {
     end_date: string | null;
     agency_id: string;
     created_by: string;
+    created_at: string;
+    updated_at: string;
+
+    // Financial Fields
+    currency: string; // 'EUR', 'USD', etc.
+    payment_status: PaymentStatus;
+    payment_method: string | null;
+    invoice_date: string | null;
+    invoice_number: string | null;
+    payment_terms: number; // Days
+    actual_hours: number | null;
+    platform_breakdown: { [key: string]: number } | null;
+}
+
+export interface Expense {
+    id: string;
+    user_id: string;
+    campaign_id: string | null;
+    description: string;
+    amount: number;
+    category: ExpenseCategory;
+    date: string;
+    receipt_url: string | null;
     created_at: string;
     updated_at: string;
 }

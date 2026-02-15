@@ -18,6 +18,7 @@ const COLUMNS = [
     { id: "review", label: "Revisión" },
     { id: "published", label: "Publicado" },
     { id: "payment_pending", label: "Pago Pendiente" },
+    { id: "paid", label: "Pagado 🤑" },
 ] as const;
 
 type ColumnId = (typeof COLUMNS)[number]["id"];
@@ -118,7 +119,7 @@ export function KanbanBoard({ initialCampaigns }: KanbanBoardProps) {
 
     if (!mounted) {
         return (
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 {COLUMNS.map((col) => (
                     <div key={col.id} className="space-y-2">
                         <h3 className="text-sm font-semibold text-muted-foreground">
@@ -133,7 +134,7 @@ export function KanbanBoard({ initialCampaigns }: KanbanBoardProps) {
 
     return (
         <DragDropContext onDragEnd={onDragEnd}>
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 {COLUMNS.map((col) => (
                     <div key={col.id} className="space-y-2">
                         {/* Column header */}

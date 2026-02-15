@@ -1,16 +1,8 @@
 <div align="center">
 
-# 🚀 CreatorOS (MVP)
+# CreatorOS (MVP v0.8)
 
-**SaaS para la gestión profesional de Influencers y Creadores de Contenido.**
-
-Centraliza la gestión de campañas, finanzas y tu Media Kit público en una sola plataforma.
-
-[![Next.js](https://img.shields.io/badge/Next.js-14%2F15-black?logo=next.js)](https://nextjs.org/)
-[![Supabase](https://img.shields.io/badge/Supabase-Auth%20%2B%20DB-3FCF8E?logo=supabase)](https://supabase.com/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC?logo=tailwindcss)](https://tailwindcss.com/)
-[![Shadcn UI](https://img.shields.io/badge/Shadcn_UI-Components-000?logo=shadcnui)](https://ui.shadcn.com/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://typescriptlang.org/)
+**El Sistema Operativo integral para Creadores de Contenido y Agencias.**
 
 </div>
 
@@ -18,46 +10,49 @@ Centraliza la gestión de campañas, finanzas y tu Media Kit público en una sol
 
 ## 🛠 Stack Tecnológico
 
-- **Core**: Next.js 14/15 (App Router), TypeScript.
-- **Estilos**: Tailwind CSS, Shadcn UI, Lucide React.
-- **Base de Datos & Auth**: Supabase (PostgreSQL + RLS).
-- **Librerías Clave**:
-  - `recharts` (Gráficos financieros).
-  - `@hello-pangea/dnd` (Drag & drop del Kanban).
-  - `react-hook-form` + `zod` (Formularios y Validación).
-  - `react-social-media-embed` (Embeds de TikTok/IG/YouTube).
+- **Framework**: Next.js 15 (App Router), TypeScript.
+- **Estilos**: Tailwind CSS, Shadcn UI.
+- **Backend**: Supabase (PostgreSQL, Auth, RLS).
+- **Visualización**: Recharts (Gráficos Financieros).
+- **Gestión**: @hello-pangea/dnd (Kanban).
 
 ---
 
-## ✨ Funcionalidades Implementadas (Estado Actual)
+## ✨ Core Features (Lo Nuevo)
 
-### 🔐 Autenticación
-- Login con Magic Link (Supabase Auth).
-- Protección de rutas y gestión de sesión.
+### 💸 Suite Financiera (Nuevo)
 
-### 📋 Gestión de Campañas (Kanban)
-- **Tablero Drag & Drop**: Visualización intuitiva del flujo de trabajo.
-- **CRUD Completo**: Crear, Editar (con pre-llenado), Eliminar (con confirmación).
-- **Sistema de Etiquetas**: Priorización por colores (Tags) persistentes en DB y UI.
+- **P&L en Tiempo Real**: Cálculo automático de Ingresos Brutos, Gastos (COGS/OpEx) y Beneficio Neto.
+- **Calculadora de Rentabilidad**: Análisis de tarifa horaria efectiva ($/hora) por proyecto.
+- **Gestión de Flujo de Caja**: Control de estados (Pendiente, Facturado, Pagado, Vencido).
+- **Facturación Flexible**: Soporte para flujo 'Hobby' (sin factura) y 'Pro' (con datos fiscales y trazabilidad).
+- **Control de Gastos**: Registro de tickets y categorización (Producción, Viajes, Agencia).
 
-### 💰 Finanzas
-- **Dashboard Visual**: KPIs en tiempo real (Ingresos Totales, Pendiente de Cobro).
-- **Gráficos**: Evolución mensual de ingresos usando `recharts`.
+### 📋 Gestión de Campañas (Kanban 2.0)
 
-### 🎨 Perfil Público (Media Kit 2.0)
-- **Ruta Pública**: `/[username]` (SSR optimizado).
-- **Client Wrapper**: Solución a problemas de hidratación en embeds.
-- **Sistema de Plantillas**: Arquitectura lista para escalar (Default: 'Simple').
-- **Embeds Multimedia**: Grid responsivo (3 columnas en desktop) para videos de TikTok/IG/YT.
-- **Datos Estructurados**: Uso eficiente de columnas `JSONB` (`social_links`, `featured_content`, `selected_template`) en PostgreSQL.
+- **Tablero con automatización de estados**: Arrastrar a 'Pagado' cierra el ciclo financiero.
+- **Tarjetas inteligentes**: Indicadores de Facturación (No. Factura) y Rentabilidad (Horas Reales).
+- **Sistema de Etiquetas**: Organización visual por prioridades.
 
-### ⚙️ Configuración
-- **Perfil Público**: Editor visual dedicado con previsualización y límite de 9 videos.
-- **Ajustes de Cuenta**: Gestión privada de datos personales.
+### 🎨 Perfil Público (Media Kit)
+
+- **Link-in-Bio personalizable**: Con embeds de video (TikTok/IG).
+- **Grid responsivo**: Optimizado para conversión.
 
 ---
 
-## 🚀 Guía de Instalación Rápida
+## 🗺 Estado del Proyecto (Roadmap)
+
+- [x] **Autenticación & Base de Datos**
+- [x] **Kanban & Workflow Automation**
+- [x] **Módulo Financiero Completo (Ingresos, Gastos, Rentabilidad)**
+- [x] **Perfil Público (Link in Bio)**
+- [ ] Almacenamiento (Subida de Avatares/Tickets)
+- [ ] Módulo de Agencia (Multi-talent management)
+
+---
+
+## 🚀 Setup
 
 1.  **Clonar el repositorio**:
     ```bash
@@ -71,7 +66,7 @@ Centraliza la gestión de campañas, finanzas y tu Media Kit público en una sol
     ```
 
 3.  **Configurar variables de entorno**:
-    Crea un archivo `.env.local` con tus credenciales de Supabase:
+    Crea un archivo `.env.local`:
     ```env
     NEXT_PUBLIC_SUPABASE_URL=your_project_url
     NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
@@ -84,17 +79,6 @@ Centraliza la gestión de campañas, finanzas y tu Media Kit público en una sol
 
 ---
 
-## ✅ Estado del Proyecto
-
-- [x] **Autenticación & Base de Datos**
-- [x] **Kanban (Full Features)**
-- [x] **Perfil Público (Visualización & Edición)**
-- [ ] Subida de Imágenes (Storage)
-- [ ] Integración de Pagos (Stripe)
-- [ ] Módulo de Agencia (B2B)
-
----
-
 <div align="center">
-  Hecho con ❤️ y Next.js por <b>Daniela Giraldo Pardo</b>
+  Hecho con ❤️ por <b>Qoopa Agency</b>
 </div>
