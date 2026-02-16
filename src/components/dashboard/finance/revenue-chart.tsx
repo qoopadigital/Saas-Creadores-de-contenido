@@ -41,63 +41,66 @@ export function RevenueChart({ data }: RevenueChartProps) {
             </CardHeader>
             <CardContent>
                 {!mounted ? (
-                    <div className="h-[300px] w-full animate-pulse rounded-md bg-muted" />
+                    <div className="h-[350px] w-full animate-pulse rounded-md bg-muted" />
                 ) : (
-                    <ResponsiveContainer width="100%" height={300}>
-                        <AreaChart data={data}>
-                            <defs>
-                                <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                                </linearGradient>
-                                <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                            <XAxis
-                                dataKey="name"
-                                tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-                                axisLine={false}
-                                tickLine={false}
-                            />
-                            <YAxis
-                                tickFormatter={formatCurrency}
-                                tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-                                axisLine={false}
-                                tickLine={false}
-                                width={50}
-                            />
-                            <Tooltip
-                                contentStyle={{
-                                    backgroundColor: "hsl(var(--card))",
-                                    border: "1px solid hsl(var(--border))",
-                                    borderRadius: "var(--radius)",
-                                    fontSize: 13,
-                                }}
-                                formatter={(value: number | undefined) => [`$${(value ?? 0).toLocaleString()}`, ""]}
-                            />
-                            <Area
-                                type="monotone"
-                                dataKey="income"
-                                name="Ingresos"
-                                stroke="hsl(var(--primary))"
-                                strokeWidth={2}
-                                fill="url(#colorIncome)"
-                                stackId="1"
-                            />
-                            <Area
-                                type="monotone"
-                                dataKey="expenses"
-                                name="Gastos"
-                                stroke="#ef4444"
-                                strokeWidth={2}
-                                fill="url(#colorExpenses)"
-                                stackId="2"
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
+                    <div className="h-[400px] w-full min-h-[400px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                                <defs>
+                                    <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                                    </linearGradient>
+                                    <linearGradient id="colorExpenses" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                                <XAxis
+                                    dataKey="name"
+                                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                />
+                                <YAxis
+                                    tickFormatter={formatCurrency}
+                                    tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    width={50}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: "hsl(var(--background))",
+                                        borderColor: "hsl(var(--border))",
+                                        borderRadius: "8px",
+                                        boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)"
+                                    }}
+                                    itemStyle={{ color: "hsl(var(--foreground))" }}
+                                    formatter={(value: number | undefined) => [`$${(value ?? 0).toLocaleString()}`, ""]}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="income"
+                                    name="Ingresos"
+                                    stroke="hsl(var(--primary))"
+                                    strokeWidth={2}
+                                    fill="url(#colorIncome)"
+                                    stackId="1"
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="expenses"
+                                    name="Gastos"
+                                    stroke="#ef4444"
+                                    strokeWidth={2}
+                                    fill="url(#colorExpenses)"
+                                    stackId="2"
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
                 )}
             </CardContent>
         </Card>

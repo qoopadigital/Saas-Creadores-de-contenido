@@ -205,6 +205,7 @@ export async function updateCampaign(formData: FormData) {
         invoice_date: string | null;
         invoice_number: string | null;
         payment_method: string | null;
+        platform: string | null;
         status?: string; // We might update status too
     } = {
         actual_hours: formData.get("actual_hours") ? Number(formData.get("actual_hours")) : null,
@@ -212,6 +213,7 @@ export async function updateCampaign(formData: FormData) {
         invoice_date: formData.get("invoice_date") as string || null,
         invoice_number: formData.get("invoice_number") as string || null,
         payment_method: formData.get("payment_method") as string || null,
+        platform: formData.get("platform") as string || null,
     };
 
     // Cleanup Logic: If not paid/invoiced, clear invoice data? 

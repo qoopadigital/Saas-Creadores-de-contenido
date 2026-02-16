@@ -30,6 +30,10 @@ interface CampaignRow {
     payment_status?: string;
 }
 
+import { calculateHourlyRate, FinancialCampaign, Expense } from "@/lib/utils/finance";
+
+// ... (existing imports)
+
 export interface FinancialData {
     totalRevenue: number;
     totalExpenses: number;
@@ -38,7 +42,9 @@ export interface FinancialData {
     pipelineValue: number;
     monthlyData: MonthlyDataPoint[];
     recentTransactions: CampaignRow[];
-    expensesByCategory: { name: string; value: number }[]; // Changed from Record<string, number>
+    expensesByCategory: { name: string; value: number; fill: string }[];
+    incomeByPlatform: { name: string; value: number; fill: string }[];
+    topBrands: { name: string; value: number; fill: string }[];
     averageHourlyRate: number;
     recentInvoices: {
         id: string;
@@ -47,13 +53,21 @@ export interface FinancialData {
         date: string | null;
         status: string | undefined;
     }[];
+    campaigns: CampaignRow[];
+    expenses: {
+        id: string;
+        description: string;
+        amount: number;
+        category: string;
+        date: string;
+    }[];
 }
 
-// ... (Zod Schema remains the same) ...
+// ... (existing helper functions)
 
-// ... (createExpense, deleteExpense, getCampaignExpenses remain the same) ...
+const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 
-export async function getFinancialData(): Promise<{
+export async function getFinancialData(year?: number, month?: number): Promise<{
     data: FinancialData | null;
     error: string | null;
 }> {
@@ -85,9 +99,32 @@ export async function getFinancialData(): Promise<{
     if (campaignsResult.error) return { data: null, error: campaignsResult.error.message };
     if (expensesResult.error) return { data: null, error: expensesResult.error.message };
 
-    const campaigns = campaignsResult.data as CampaignRow[];
+    const allCampaigns = campaignsResult.data as CampaignRow[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const expenses = expensesResult.data as any[];
+    const allExpenses = expensesResult.data as any[];
+
+    // Filter by Date (Year/Month) if provided
+    // Default: If no year provided, maybe show all? Or current year?
+    // Let's filter if provided.
+    const campaigns = allCampaigns.filter(c => {
+        if (!year && month === undefined) return true;
+        const d = new Date(c.updated_at || c.created_at);
+        const y = d.getFullYear();
+        const m = d.getMonth(); // 0-11
+        if (year && y !== year) return false;
+        if (month !== undefined && m !== (month - 1)) return false;
+        return true;
+    });
+
+    const expenses = allExpenses.filter(e => {
+        if (!year && month === undefined) return true;
+        const d = new Date(e.date);
+        const y = d.getFullYear();
+        const m = d.getMonth();
+        if (year && y !== year) return false;
+        if (month !== undefined && m !== (month - 1)) return false;
+        return true;
+    });
 
     // ---- Aggregate totals ----
     const { totalRevenue, pendingAmount, pipelineValue } = campaigns.reduce(
@@ -119,12 +156,57 @@ export async function getFinancialData(): Promise<{
     const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
     const netProfit = totalRevenue - totalExpenses;
 
+    // Helper for grouping
+    const groupData = (data: { name: string; value: number }[]) => {
+        const sorted = data.sort((a, b) => b.value - a.value);
+        if (sorted.length <= 5) {
+            return sorted.map((item, index) => ({ ...item, fill: COLORS[index % COLORS.length] }));
+        }
+        const top4 = sorted.slice(0, 4).map((item, index) => ({ ...item, fill: COLORS[index] }));
+        const othersValue = sorted.slice(4).reduce((sum, item) => sum + item.value, 0);
+        return [...top4, { name: "Otros", value: othersValue, fill: "#e5e7eb" }];
+    };
+
     // ---- Expense Breakdown ----
-    const expensesByCategory: Record<string, number> = {};
+    const expensesByCategoryMap: Record<string, number> = {};
     expenses.forEach((e) => {
         const cat = e.category || "other";
-        expensesByCategory[cat] = (expensesByCategory[cat] || 0) + Number(e.amount);
+        expensesByCategoryMap[cat] = (expensesByCategoryMap[cat] || 0) + Number(e.amount);
     });
+
+    const expensesByCategory = groupData(
+        Object.entries(expensesByCategoryMap).map(([name, value]) => ({ name, value }))
+    );
+
+    // ---- Income by Platform ----
+    const incomeByPlatformMap: Record<string, number> = {};
+    campaigns.forEach((c) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((c as any).payment_status === "paid") {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const platform = (c as any).platform || "other";
+            incomeByPlatformMap[platform] = (incomeByPlatformMap[platform] || 0) + (c.budget || 0);
+        }
+    });
+
+    const incomeByPlatform = groupData(
+        Object.entries(incomeByPlatformMap).map(([name, value]) => ({ name, value }))
+    );
+
+    // ---- Top Brands (Income) ----
+    const incomeByBrandMap: Record<string, number> = {};
+    campaigns.forEach((c) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((c as any).payment_status === "paid") {
+            const brand = c.brand_name || "Desconocido";
+            incomeByBrandMap[brand] = (incomeByBrandMap[brand] || 0) + (c.budget || 0);
+        }
+    });
+
+    const topBrands = groupData(
+        Object.entries(incomeByBrandMap).map(([name, value]) => ({ name, value }))
+    );
+
 
     // ---- Monthly Chart Data (Income vs Expenses) ----
     const monthIncome: Record<string, number> = {};
@@ -167,25 +249,11 @@ export async function getFinancialData(): Promise<{
         )
         .slice(0, 5);
 
-    // 4. Calculate Efficiency (Hourly Rate)
-    // Filter campaigns that have actual_hours > 0
-    const campaignsWithHours = campaigns.filter(c => (c.actual_hours || 0) > 0);
-    const totalHours = campaignsWithHours.reduce((sum, c) => sum + (c.actual_hours || 0), 0);
-
-    // Calculate Net Profit for these specific campaigns to get a real efficiency rate
-    // We need expenses for these campaigns. We have all expenses.
-    // Efficiency = (Sum of revenue of these campaigns - Sum of expenses of these campaigns) / Total Hours
-    // Revenue = budget (assuming paid/invoiced/pending all count for "value produced", or strictly paid? 
-    // The prompt says "Valor de tu Hora". Usually implies value generated vs time spent. Let's use budget.)
-    const efficiencyRevenue = campaignsWithHours.reduce((sum, c) => sum + (c.budget || 0), 0);
-
-    // Expenses for these campaigns
-    const efficiencyExpenses = expenses
-        .filter(e => campaignsWithHours.some(c => c.id === e.campaign_id))
-        .reduce((sum, e) => sum + Number(e.amount), 0);
-
-    const efficiencyNetProfit = efficiencyRevenue - efficiencyExpenses;
-    const averageHourlyRate = totalHours > 0 ? efficiencyNetProfit / totalHours : 0;
+    // 4. Calculate Efficiency (Hourly Rate) using SHARED LOGIC
+    // Transform campaigns to FinancialCampaign type if needed, but they share extracted interface partially
+    // We cast to any or compatible type
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const averageHourlyRate = calculateHourlyRate(campaigns as any[], expenses as any[]);
 
     // 5. Recent Invoices
     const recentInvoices = campaigns
@@ -208,10 +276,14 @@ export async function getFinancialData(): Promise<{
             totalExpenses,
             netProfit,
             monthlyData,
-            expensesByCategory: Object.entries(expensesByCategory).map(([name, value]) => ({ name, value })),
+            expensesByCategory,
+            incomeByPlatform,
+            topBrands,
             recentTransactions,
             averageHourlyRate,
             recentInvoices,
+            campaigns,
+            expenses,
         },
         error: null,
     };

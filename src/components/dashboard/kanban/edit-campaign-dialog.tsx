@@ -49,6 +49,7 @@ const formSchema = z.object({
     budget: z.string().min(1, "El presupuesto es requerido"),
     deadline: z.string().min(1, "La fecha límite es requerida"),
     tags: z.array(z.string()).optional(),
+    platform: z.string().optional(),
     // Financials
     payment_status: z.enum(["pending", "invoiced", "paid", "overdue"]).optional(),
     has_invoice: z.boolean().default(false).optional(),
@@ -159,6 +160,7 @@ export function EditCampaignDialog({
         formData.append("deadline", data.deadline);
         formData.append("status", campaign.status);
         formData.append("tags", JSON.stringify(data.tags || []));
+        formData.append("platform", data.platform || "");
 
         // Financials
         formData.append("payment_status", data.payment_status || "pending");
@@ -263,6 +265,31 @@ export function EditCampaignDialog({
                                     <Input id="edit-budget" type="number" disabled={isLoading} {...register("budget")} />
                                     {errors.budget && <p className="text-sm text-destructive">{errors.budget.message}</p>}
                                 </div>
+                            </div>
+
+                            {/* Platform */}
+                            <div className="space-y-2">
+                                <Label>Plataforma</Label>
+                                <Controller
+                                    control={control}
+                                    name="platform"
+                                    render={({ field }) => (
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Seleccionar plataforma..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="instagram">Instagram</SelectItem>
+                                                <SelectItem value="tiktok">TikTok</SelectItem>
+                                                <SelectItem value="youtube">YouTube</SelectItem>
+                                                <SelectItem value="twitch">Twitch</SelectItem>
+                                                <SelectItem value="facebook">Facebook</SelectItem>
+                                                <SelectItem value="ugc">UGC</SelectItem>
+                                                <SelectItem value="other">Otro</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
                             </div>
 
                             {/* Deadline */}

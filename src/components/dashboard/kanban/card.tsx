@@ -38,6 +38,7 @@ export interface CampaignData {
     deadline: string;
     status: string;
     tags?: string[];
+    platform?: string;
     // Financials
     payment_status?: string;
     invoice_date?: string | null;

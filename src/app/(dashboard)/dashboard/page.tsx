@@ -19,6 +19,7 @@ import {
     TrendingUp,
     TrendingDown,
     CreditCard,
+    Timer,
 } from "lucide-react";
 import { getDashboardOverview, getRecentExpenses } from "./actions";
 
@@ -73,7 +74,7 @@ export default async function DashboardPage() {
     const monthlyRevenue = overviewData?.monthlyRevenue ?? 0;
     const monthlyExpenses = overviewData?.monthlyExpenses ?? 0;
     const netProfit = overviewData?.netProfit ?? 0;
-    const teamMembers = overviewData?.teamMembers ?? 1;
+    const hourlyRate = overviewData?.hourlyRate ?? 0;
     const lastCampaigns = overviewData?.lastCampaigns ?? [];
 
     const summaryCards = [
@@ -111,12 +112,13 @@ export default async function DashboardPage() {
             valueColor: netProfit < 0 ? "text-rose-600" : undefined,
         },
         {
-            title: "Miembros del Equipo",
-            value: String(teamMembers),
-            description: teamMembers === 1 ? "Solo tú por ahora" : `${teamMembers} miembros`,
-            icon: Users,
-            color: "text-violet-500",
-            bgColor: "bg-violet-500/10",
+            title: "Valor de tu Hora",
+            value: `${formatCurrency(hourlyRate)}/h`,
+            description: "Basado en tus horas registradas",
+            icon: Timer,
+            color: hourlyRate > 0 ? "text-violet-500" : "text-muted-foreground",
+            bgColor: hourlyRate > 0 ? "bg-violet-500/10" : "bg-muted",
+            valueColor: hourlyRate > 0 ? "text-violet-600" : undefined,
         },
     ];
 
