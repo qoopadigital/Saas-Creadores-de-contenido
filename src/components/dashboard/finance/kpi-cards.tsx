@@ -5,6 +5,7 @@ interface KpiCardsProps {
     totalRevenue: number;
     pendingAmount: number;
     totalExpenses: number;
+    providerExpenses: number;
     netProfit: number;
 }
 
@@ -20,8 +21,10 @@ export function KpiCards({
     totalRevenue,
     pendingAmount,
     totalExpenses,
+    providerExpenses,
     netProfit,
 }: KpiCardsProps) {
+    const campaignExpenses = totalExpenses - providerExpenses;
     const cards = [
         {
             title: "Ingresos Cobrados",
@@ -70,6 +73,18 @@ export function KpiCards({
                         <div className={`text-2xl font-bold ${card.isBold ? "text-emerald-900 dark:text-emerald-400" : ""}`}>
                             {formatCurrency(card.value)}
                         </div>
+                        {card.title === "Gastos Totales" && providerExpenses > 0 && (
+                            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                <div className="flex justify-between">
+                                    <span>Campañas</span>
+                                    <span>{formatCurrency(campaignExpenses)}</span>
+                                </div>
+                                <div className="flex justify-between text-destructive font-medium">
+                                    <span>Proveedores</span>
+                                    <span>{formatCurrency(providerExpenses)}</span>
+                                </div>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             ))}

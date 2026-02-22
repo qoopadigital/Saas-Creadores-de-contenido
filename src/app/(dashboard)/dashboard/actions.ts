@@ -9,6 +9,8 @@ interface RecentCampaign {
     budget: number;
     status: string;
     updated_at: string;
+    deadline?: string;
+    payment_status?: string;
 }
 
 import { calculateHourlyRate, FinancialCampaign, Expense } from "@/lib/utils/finance";
@@ -19,9 +21,11 @@ export interface DashboardOverview {
     activeCampaignsCount: number;
     monthlyRevenue: number;
     monthlyExpenses: number;
+    monthlyProviderPayments: number;
     netProfit: number;
     hourlyRate: number;
     lastCampaigns: RecentCampaign[];
+    allCampaigns: RecentCampaign[];
 }
 
 export async function getDashboardOverview(): Promise<{
@@ -41,7 +45,7 @@ export async function getDashboardOverview(): Promise<{
     // Single efficient query — only the columns we need
     const { data: campaigns, error } = await supabase
         .from("campaigns")
-        .select("id, title, brand_name, budget, status, updated_at, created_at, payment_status, actual_hours")
+        .select("id, title, brand_name, budget, status, updated_at, created_at, payment_status, actual_hours, deadline")
         .eq("influencer_id", user.id)
         .order("updated_at", { ascending: false });
 
@@ -76,59 +80,49 @@ export async function getDashboardOverview(): Promise<{
         }
     }
 
-    // Last 3 campaigns for activity feed
+    // Last 3 campaigns for activity feed (already ordered by updated_at DESC)
     const lastCampaigns = rows.slice(0, 3);
 
-    // ---- Expenses (Current Month) ----
-    const { data: expenses } = await supabase
-        .from("expenses")
-        .select("id, amount, date, campaign_id") // Added fields for shared logic
-        .eq("user_id", user.id);
+    // ---- Parallel fetch: Expenses + Provider Payments (Current Month) ----
+    const [expensesResult, providerPaymentsResult] = await Promise.all([
+        supabase
+            .from("expenses")
+            .select("id, amount, date, campaign_id")
+            .eq("user_id", user.id),
+        supabase
+            .from("provider_payments")
+            .select("id, amount, payment_date, description, providers(name)")
+            .eq("user_id", user.id),
+    ]);
+
+    const expenses = expensesResult.data || [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const providerPayments = (providerPaymentsResult.data || []) as any[];
 
     let monthlyExpenses = 0;
-    if (expenses) {
-        expenses.forEach((e) => {
-            const expenseDate = new Date(e.date);
-            if (expenseDate >= monthStart && expenseDate <= monthEnd) {
-                monthlyExpenses += Number(e.amount);
-            }
-        });
-    }
+    expenses.forEach((e) => {
+        const expenseDate = new Date(e.date);
+        if (expenseDate >= monthStart && expenseDate <= monthEnd) {
+            monthlyExpenses += Number(e.amount);
+        }
+    });
 
-    const netProfit = monthlyRevenue - monthlyExpenses;
+    let monthlyProviderPayments = 0;
+    providerPayments.forEach((p) => {
+        const paymentDate = new Date(p.payment_date);
+        if (paymentDate >= monthStart && paymentDate <= monthEnd) {
+            monthlyProviderPayments += Number(p.amount);
+        }
+    });
 
-    // Calculate Hourly Rate using SHARED LOGIC
-    // Allow logic to look at ALL campaigns/expenses to determine efficiency, 
-    // OR restrict to this month? Prompt said "Promedio de Tarifa Horaria del mes actual" in first request,
-    // but in Step 2: "Hourly Rate = Sum(Beneficio Neto de campañas Pagadas) / Sum(Horas Reales)".
-    // It didn't explicitly say "del mes" in Step 2, but implied consistency.
-    // However, usually Hourly Rate is a general metric or monthly?
-    // Let's stick to the shared logic which effectively calculates efficiency of PAID campaigns.
-    // If we want it for the MONTH, we should filter campaigns/expenses first if we want consistency with the Finance page which shows "Promedio basado en campañas finalizadas este mes" in the screenshot/text?
-    // Wait, Finance page text says: "Promedio basado en campañas finalizadas este mes."
-    // So we should filter campaigns by month before passing to shared logic IF shared logic doesn't filter.
-    // Shared logic takes list of campaigns.
-    // Let's filter campaigns to only those updated/paid THIS MONTH if we want "this month's efficiency".
-    // Or we pass all and let the user decide?
-    // The previous implementation in dashboard/actions.ts calculated `monthlyHours` and `netProfit` (monthly).
-    // `netProfit` passed to formula was `monthlyRevenue - monthlyExpenses`.
-    // So it was definitely monthly.
-    // Let's filter campaigns for the shared logic to be "Current Month".
+    // Net Profit = Revenue - Campaign Expenses - Provider Payments
+    const netProfit = monthlyRevenue - monthlyExpenses - monthlyProviderPayments;
 
-    // We need to pass campaigns that are "paid" and in this month.
+    // Monthly campaigns for hourly rate calculation
     const monthlyCampaigns = (campaigns || []).filter(c => {
         const updated = new Date(c.updated_at);
         return updated >= monthStart && updated <= monthEnd;
     });
-
-    // We pass ALL expenses because shared logic filters expenses by campaign ID for net profit calculation of those campaigns.
-    // BUT `netProfit` passed to shared logic isn't used, logic calculates it internally.
-    // Logic: `Sum(Revenue of these campaigns) - Sum(Expenses of these campaigns)`.
-    // It does NOT look at "general monthly expenses" (tax, rent) unless they are linked to the campaign.
-    // This is "Project Efficiency". 
-    // The Dashboard "Net Profit" (KPI card) includes ALL expenses (rent, etc). 
-    // The "Hourly Rate" (Efficiency) should probably be based on Project Profitability (Campaign budget - Campaign expenses).
-    // So passing "monthlyCampaigns" and "all expenses" (to find matches) is correct for "Project Efficiency in this Month".
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const hourlyRate = calculateHourlyRate(monthlyCampaigns as any[], expenses as any[] || []);
@@ -137,10 +131,12 @@ export async function getDashboardOverview(): Promise<{
         data: {
             activeCampaignsCount,
             monthlyRevenue,
-            monthlyExpenses,
+            monthlyExpenses: monthlyExpenses + monthlyProviderPayments,
+            monthlyProviderPayments,
             netProfit,
             hourlyRate,
             lastCampaigns,
+            allCampaigns: rows,
         },
         error: null,
     };
@@ -160,12 +156,37 @@ export async function getRecentExpenses(): Promise<RecentExpense[]> {
 
     if (!user) return [];
 
-    const { data } = await supabase
-        .from("expenses")
-        .select("id, description, amount, category, date")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(5);
+    // Fetch both campaign expenses and provider payments in parallel
+    const [expensesResult, providerPaymentsResult] = await Promise.all([
+        supabase
+            .from("expenses")
+            .select("id, description, amount, category, date")
+            .eq("user_id", user.id)
+            .order("date", { ascending: false })
+            .limit(6),
+        supabase
+            .from("provider_payments")
+            .select("id, amount, description, payment_date, providers(name)")
+            .eq("user_id", user.id)
+            .order("payment_date", { ascending: false })
+            .limit(6),
+    ]);
 
-    return (data as RecentExpense[]) || [];
+    const campaignExpenses: RecentExpense[] = ((expensesResult.data as RecentExpense[]) || []);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const providerExpenses: RecentExpense[] = ((providerPaymentsResult.data || []) as any[]).map((p) => ({
+        id: p.id,
+        description: `Pago a ${p.providers?.name || "Proveedor"} (${p.description})`,
+        amount: Number(p.amount),
+        category: "provider",
+        date: p.payment_date,
+    }));
+
+    // Combine, sort by date DESC, return top 6
+    const combined = [...campaignExpenses, ...providerExpenses]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 6);
+
+    return combined;
 }

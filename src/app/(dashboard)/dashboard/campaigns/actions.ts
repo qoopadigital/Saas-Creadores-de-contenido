@@ -11,7 +11,11 @@ const campaignSchema = z.object({
     budget: z.coerce.number().positive("El presupuesto debe ser positivo"),
     deadline: z.string().min(1, "La fecha límite es requerida"),
     status: z.string().default("negotiation"),
-    tags: z.array(z.string()).optional(),
+    tags: z.array(z.string()).optional().default([]),
+    contract_links: z.array(z.string()).optional().default([]),
+    notes: z.string().optional(),
+    platforms: z.array(z.string()).optional().default([]),
+    brand_id: z.string().uuid().optional().nullable(),
 });
 
 // ---- Get Campaigns ----
@@ -20,18 +24,26 @@ export async function getCampaigns() {
 
     const { data: campaigns, error } = await supabase
         .from("campaigns")
-        .select("*, expenses(amount)")
+        .select("*, expenses(amount), provider_payments(amount), campaign_tasks(is_completed)")
+        .neq("is_archived", true)
         .order("created_at", { ascending: false });
 
     if (error) {
         return { error: error.message, data: null };
     }
 
-    // Process campaigns to add total_expenses
-    const processedCampaigns = campaigns.map(campaign => ({
-        ...campaign,
-        total_expenses: campaign.expenses?.reduce((sum: number, e: { amount: number }) => sum + Number(e.amount), 0) || 0,
-    }));
+    // Process campaigns to add total_expenses and task counts
+    const processedCampaigns = campaigns.map(campaign => {
+        const tasks = campaign.campaign_tasks || [];
+        return {
+            ...campaign,
+            total_expenses:
+                (campaign.expenses?.reduce((sum: number, e: { amount: number }) => sum + Number(e.amount), 0) || 0) +
+                (campaign.provider_payments?.reduce((sum: number, p: { amount: number }) => sum + Number(p.amount), 0) || 0),
+            tasks_total: tasks.length,
+            tasks_completed: tasks.filter((t: { is_completed: boolean }) => t.is_completed).length,
+        };
+    });
 
     return { data: processedCampaigns, error: null };
 }
@@ -40,14 +52,31 @@ export async function getCampaigns() {
 export async function createCampaign(formData: FormData) {
     const supabase = await createClient();
 
+    // Safely parse JSON arrays
+    const parseArray = (key: string) => {
+        const val = formData.get(key);
+        if (!val) return [];
+        try {
+            const parsed = JSON.parse(val as string);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    };
+
     // Validate with Zod
+    const brandId = formData.get("brand_id") as string || null;
     const parsed = campaignSchema.safeParse({
         title: formData.get("title"),
         brand_name: formData.get("brand_name"),
         budget: formData.get("budget"),
         deadline: formData.get("deadline"),
         status: "negotiation",
-        tags: formData.get("tags") ? JSON.parse(formData.get("tags") as string) : [],
+        tags: parseArray("tags"),
+        contract_links: parseArray("contract_links"),
+        notes: formData.get("notes") as string || undefined,
+        platforms: parseArray("platforms"),
+        brand_id: brandId || undefined,
     });
 
     if (!parsed.success) {
@@ -159,9 +188,99 @@ export async function deleteCampaign(id: string) {
     }
 
     revalidatePath("/dashboard/campaigns");
+    revalidatePath("/dashboard/campaigns/archived");
     revalidatePath("/dashboard/finance");
     revalidatePath("/dashboard");
     revalidatePath("/", "layout");
+    return { success: true };
+}
+
+// ==== ARCHIVE SYSTEM ====
+
+export async function getArchivedCampaigns() {
+    const supabase = await createClient();
+
+    const { data: campaigns, error } = await supabase
+        .from("campaigns")
+        .select("*, expenses(amount), provider_payments(amount), campaign_tasks(is_completed)")
+        .eq("is_archived", true)
+        .order("created_at", { ascending: false });
+
+    if (error) {
+        return { error: error.message, data: null };
+    }
+
+    const processedCampaigns = campaigns.map(campaign => {
+        const tasks = campaign.campaign_tasks || [];
+        return {
+            ...campaign,
+            total_expenses:
+                (campaign.expenses?.reduce((sum: number, e: { amount: number }) => sum + Number(e.amount), 0) || 0) +
+                (campaign.provider_payments?.reduce((sum: number, p: { amount: number }) => sum + Number(p.amount), 0) || 0),
+            tasks_total: tasks.length,
+            tasks_completed: tasks.filter((t: { is_completed: boolean }) => t.is_completed).length,
+        };
+    });
+
+    return { data: processedCampaigns, error: null };
+}
+
+export async function archiveCampaign(id: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return { error: "No autenticado" };
+
+    const { error } = await supabase
+        .from("campaigns")
+        .update({ is_archived: true })
+        .eq("id", id)
+        .eq("influencer_id", user.id);
+
+    if (error) return { error: error.message };
+
+    revalidatePath("/dashboard/campaigns");
+    revalidatePath("/dashboard/campaigns/archived");
+    return { success: true };
+}
+
+export async function restoreCampaign(id: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return { error: "No autenticado" };
+
+    const { error } = await supabase
+        .from("campaigns")
+        .update({ is_archived: false })
+        .eq("id", id)
+        .eq("influencer_id", user.id);
+
+    if (error) return { error: error.message };
+
+    revalidatePath("/dashboard/campaigns");
+    revalidatePath("/dashboard/campaigns/archived");
+    return { success: true };
+}
+
+export async function deleteCampaignPermanently(id: string) {
+    // This replicates the hard delete to match the user's specific function request name
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) return { error: "No autenticado" };
+
+    const { error } = await supabase
+        .from("campaigns")
+        .delete()
+        .eq("id", id)
+        .eq("influencer_id", user.id);
+
+    if (error) return { error: error.message };
+
+    revalidatePath("/dashboard/campaigns");
+    revalidatePath("/dashboard/campaigns/archived");
+    revalidatePath("/dashboard/finance");
     return { success: true };
 }
 
@@ -174,13 +293,30 @@ export async function updateCampaign(formData: FormData) {
         return { error: "ID de campaña requerido" };
     }
 
+    // Safely parse JSON arrays
+    const parseArray = (key: string) => {
+        const val = formData.get(key);
+        if (!val) return [];
+        try {
+            const parsed = JSON.parse(val as string);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    };
+
+    const brandId = formData.get("brand_id") as string || null;
     const parsed = campaignSchema.safeParse({
         title: formData.get("title"),
         brand_name: formData.get("brand_name"),
         budget: formData.get("budget"),
         deadline: formData.get("deadline"),
         status: formData.get("status") || "negotiation",
-        tags: formData.get("tags") ? JSON.parse(formData.get("tags") as string) : [],
+        tags: parseArray("tags"),
+        contract_links: parseArray("contract_links"),
+        notes: formData.get("notes") as string || undefined,
+        platforms: parseArray("platforms"),
+        brand_id: brandId || undefined,
     });
 
     if (!parsed.success) {
@@ -262,6 +398,7 @@ export async function updateCampaign(formData: FormData) {
         .update({
             ...parsed.data, // Original form data
             ...financialUpdates, // Financial overrides (including status sync)
+            updated_at: new Date().toISOString(), // Force refresh for Activity feed
         })
         .eq("id", id)
         .eq("influencer_id", user.id);
@@ -349,4 +486,123 @@ export async function deleteCampaignExpense(expenseId: string) {
     revalidatePath("/dashboard/campaigns");
     revalidatePath("/dashboard/finance");
     return { success: true };
+}
+
+// ---- Get Provider Payments linked to a Campaign ----
+export async function getCampaignProviderPayments(campaignId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+        .from("provider_payments")
+        .select("id, amount, description, payment_date, providers(name)")
+        .eq("campaign_id", campaignId)
+        .eq("user_id", user.id)
+        .order("payment_date", { ascending: false });
+
+    if (error) {
+        console.error("Error fetching campaign provider payments:", error);
+        return [];
+    }
+
+    // Flatten provider name
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data || []).map((p: any) => ({
+        id: p.id,
+        amount: Number(p.amount),
+        description: p.description,
+        payment_date: p.payment_date,
+        provider_name: p.providers?.name || "Proveedor",
+    }));
+}
+
+// ============================================
+// CAMPAIGN TASKS (Checklist)
+// ============================================
+
+export async function getCampaignTasks(campaignId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+        .from("campaign_tasks")
+        .select("*")
+        .eq("campaign_id", campaignId)
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
+
+    if (error) {
+        console.error("Error fetching campaign tasks:", error);
+        return [];
+    }
+    return data || [];
+}
+
+export async function addCampaignTask(campaignId: string, title: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { data: null, error: "No autorizado" };
+
+    if (!title.trim()) return { data: null, error: "El título es obligatorio" };
+
+    const { data, error } = await supabase
+        .from("campaign_tasks")
+        .insert({
+            campaign_id: campaignId,
+            user_id: user.id,
+            title: title.trim(),
+            is_completed: false,
+        })
+        .select()
+        .single();
+
+    if (error) {
+        console.error("Error creating campaign task:", error);
+        return { data: null, error: error.message };
+    }
+
+    revalidatePath("/dashboard/campaigns");
+    return { data, error: null };
+}
+
+export async function toggleTaskCompletion(taskId: string, isCompleted: boolean) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "No autorizado" };
+
+    const { error } = await supabase
+        .from("campaign_tasks")
+        .update({ is_completed: isCompleted })
+        .eq("id", taskId)
+        .eq("user_id", user.id);
+
+    if (error) {
+        console.error("Error toggling task:", error);
+        return { error: error.message };
+    }
+
+    revalidatePath("/dashboard/campaigns");
+    return { error: null };
+}
+
+export async function deleteCampaignTask(taskId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "No autorizado" };
+
+    const { error } = await supabase
+        .from("campaign_tasks")
+        .delete()
+        .eq("id", taskId)
+        .eq("user_id", user.id);
+
+    if (error) {
+        console.error("Error deleting task:", error);
+        return { error: error.message };
+    }
+
+    revalidatePath("/dashboard/campaigns");
+    return { error: null };
 }

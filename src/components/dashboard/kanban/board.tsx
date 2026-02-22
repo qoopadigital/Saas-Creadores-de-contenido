@@ -10,6 +10,7 @@ import { toast } from "sonner";
 
 import { updateCampaignStatus } from "@/app/(dashboard)/dashboard/campaigns/actions";
 import { KanbanCard, type CampaignData } from "./card";
+import type { Brand } from "@/types/database.types";
 
 // ---- Column definitions ----
 const COLUMNS = [
@@ -25,6 +26,7 @@ type ColumnId = (typeof COLUMNS)[number]["id"];
 
 interface KanbanBoardProps {
     initialCampaigns: CampaignData[];
+    brands?: Brand[];
 }
 
 function groupByStatus(
@@ -45,7 +47,7 @@ function groupByStatus(
     return groups as Record<ColumnId, CampaignData[]>;
 }
 
-export function KanbanBoard({ initialCampaigns }: KanbanBoardProps) {
+export function KanbanBoard({ initialCampaigns, brands = [] }: KanbanBoardProps) {
     const [columns, setColumns] = useState(() =>
         groupByStatus(initialCampaigns)
     );
@@ -164,6 +166,7 @@ export function KanbanBoard({ initialCampaigns }: KanbanBoardProps) {
                                             campaign={campaign}
                                             index={index}
                                             onDelete={handleDeleteCard}
+                                            brands={brands}
                                         />
                                     ))}
                                     {provided.placeholder}

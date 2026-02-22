@@ -4,19 +4,26 @@ import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Plus, Trash2, TrendingUp, TrendingDown, DollarSign, Clock, FileText } from "lucide-react";
-import { toast } from "sonner";
+import { Loader2, CalendarIcon, Plus, Trash2, Link as LinkIcon, X, TrendingUp, TrendingDown, DollarSign, Clock, FileText, Users, ExternalLink, ListChecks } from "lucide-react";
 import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { toast } from "sonner";
 
 import {
     updateCampaign,
     getCampaignExpenses,
     createCampaignExpense,
-    deleteCampaignExpense
+    deleteCampaignExpense,
+    getCampaignProviderPayments,
+    getCampaignTasks,
+    addCampaignTask,
+    toggleTaskCompletion,
+    deleteCampaignTask,
 } from "@/app/(dashboard)/dashboard/campaigns/actions";
 import { ColorTagsInput } from "@/components/ui/color-tags-input";
 import type { CampaignData } from "./card";
-import type { Expense } from "@/types/database.types";
+import type { Brand, Expense, CampaignTask } from "@/types/database.types";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,16 +47,19 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-
+import { Textarea } from "@/components/ui/textarea";
 
 // ---- Schema ----
 const formSchema = z.object({
     title: z.string().min(3, "El título debe tener al menos 3 caracteres"),
-    brand_name: z.string().min(2, "La marca debe tener al menos 2 caracteres"),
+    brand_id: z.string().min(1, "Debes seleccionar una marca"),
+    brand_name: z.string().default(""),
     budget: z.string().min(1, "El presupuesto es requerido"),
     deadline: z.string().min(1, "La fecha límite es requerida"),
-    tags: z.array(z.string()).optional(),
-    platform: z.string().optional(),
+    tags: z.array(z.string()).default([]),
+    contract_links: z.array(z.string()).default([]),
+    notes: z.string().optional(),
+    platforms: z.array(z.string()).default([]),
     // Financials
     payment_status: z.enum(["pending", "invoiced", "paid", "overdue"]).optional(),
     has_invoice: z.boolean().default(false).optional(),
@@ -78,12 +88,14 @@ interface EditCampaignDialogProps {
     campaign: CampaignData;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    brands?: Brand[];
 }
 
 export function EditCampaignDialog({
     campaign,
     open,
     onOpenChange,
+    brands = [],
 }: EditCampaignDialogProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -94,6 +106,33 @@ export function EditCampaignDialog({
     const [newExpenseAmount, setNewExpenseAmount] = useState("");
     const [newExpenseCategory, setNewExpenseCategory] = useState("other");
 
+    // Provider Payments State
+    interface ProviderPaymentItem {
+        id: string;
+        amount: number;
+        description: string;
+        payment_date: string;
+        provider_name: string;
+    }
+    const [providerPayments, setProviderPayments] = useState<ProviderPaymentItem[]>([]);
+
+    // Campaign Tasks State
+    const [tasks, setTasks] = useState<CampaignTask[]>([]);
+    const [tasksLoading, setTasksLoading] = useState(false);
+    const [newTaskTitle, setNewTaskTitle] = useState("");
+
+    // Platform selection state
+    const platformOptions = ["Instagram", "TikTok", "YouTube", "Twitch", "Facebook"];
+    const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
+
+    // Custom Platforms (Max 5)
+    const [customPlatforms, setCustomPlatforms] = useState<string[]>([]);
+    const [currentCustomPlatform, setCurrentCustomPlatform] = useState("");
+
+    // Contract Links (Max 5)
+    const [contractLinks, setContractLinks] = useState<string[]>([]);
+    const [currentContractLink, setCurrentContractLink] = useState("");
+
     const {
         register,
         handleSubmit,
@@ -102,9 +141,11 @@ export function EditCampaignDialog({
         setValue,
         formState: { errors },
     } = useForm<FormValues>({
+        // @ts-ignore
         resolver: zodResolver(formSchema),
         defaultValues: {
             title: campaign.title,
+            brand_id: campaign.brand_id || "",
             brand_name: campaign.brand_name,
             budget: String(campaign.budget),
             deadline: campaign.deadline
@@ -117,8 +158,82 @@ export function EditCampaignDialog({
             invoice_number: campaign.invoice_number || "",
             payment_method: campaign.payment_method || "",
             actual_hours: campaign.actual_hours ? String(campaign.actual_hours) : "",
+            notes: campaign.notes || "",
+            platforms: campaign.platforms || [],
         },
     });
+
+    // Populate advanced fields on component mount to sync with remote DB values
+    useEffect(() => {
+        // Find matched predefined options
+        const rawPlatforms = campaign.platforms;
+        const campaignPlatforms = Array.isArray(rawPlatforms) ? rawPlatforms : (rawPlatforms ? [rawPlatforms] : []);
+        const predefinedMatches = campaignPlatforms.filter(p => platformOptions.includes(p));
+        // Find "Other" options not built-in  
+        const customMatches = campaignPlatforms.filter(p => !platformOptions.includes(p));
+
+        setSelectedPlatforms(predefinedMatches);
+        setCustomPlatforms(customMatches);
+
+        // Setup existing contracts
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const loadedContracts = campaign.contract_links || (campaign as any).contract_link;
+        if (loadedContracts) {
+            setContractLinks(Array.isArray(loadedContracts) ? loadedContracts : [loadedContracts]);
+        } else {
+            setContractLinks([]);
+        }
+
+        setValue("notes", campaign.notes || "");
+    }, [campaign, setValue]);
+
+    // Sync state to forms
+    useEffect(() => {
+        setValue("contract_links", contractLinks);
+    }, [contractLinks, setValue]);
+
+    useEffect(() => {
+        setValue("platforms", [...selectedPlatforms, ...customPlatforms]);
+    }, [selectedPlatforms, customPlatforms, setValue]);
+
+    // Helper functions for dynamic lists
+    const handleAddContractLink = () => {
+        if (contractLinks.length >= 5) return;
+        if (!currentContractLink) return;
+
+        try {
+            new URL(currentContractLink);
+            if (!contractLinks.includes(currentContractLink)) {
+                setContractLinks([...contractLinks, currentContractLink]);
+                setCurrentContractLink("");
+            } else {
+                toast.error("Este enlace ya ha sido añadido");
+            }
+        } catch (_) {
+            toast.error("Por favor, introduce una URL válida");
+        }
+    };
+
+    const handleRemoveContractLink = (linkToRemove: string) => {
+        setContractLinks(contractLinks.filter(link => link !== linkToRemove));
+    };
+
+    const handleAddCustomPlatform = () => {
+        if (customPlatforms.length >= 5) return;
+        if (!currentCustomPlatform.trim()) return;
+
+        const cleanPlatform = currentCustomPlatform.trim();
+        if (!selectedPlatforms.includes(cleanPlatform) && !customPlatforms.includes(cleanPlatform)) {
+            setCustomPlatforms([...customPlatforms, cleanPlatform]);
+            setCurrentCustomPlatform("");
+        } else {
+            toast.error("Esta plataforma ya está en la lista");
+        }
+    };
+
+    const handleRemoveCustomPlatform = (platformToRemove: string) => {
+        setCustomPlatforms(customPlatforms.filter(p => p !== platformToRemove));
+    };
 
     // Load Expenses on Open
     useEffect(() => {
@@ -129,16 +244,25 @@ export function EditCampaignDialog({
 
     async function loadExpenses() {
         setExpensesLoading(true);
-        const data = await getCampaignExpenses(campaign.id);
+        setTasksLoading(true);
+        const [expenseData, providerData, taskData] = await Promise.all([
+            getCampaignExpenses(campaign.id),
+            getCampaignProviderPayments(campaign.id),
+            getCampaignTasks(campaign.id),
+        ]);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setExpenses(data as any[]);
+        setExpenses(expenseData as any[]);
+        setProviderPayments(providerData);
+        setTasks(taskData as CampaignTask[]);
         setExpensesLoading(false);
+        setTasksLoading(false);
     }
 
     // Calculations
     const currentBudget = Number(watch("budget") || 0);
     const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
-    const netProfit = currentBudget - totalExpenses;
+    const totalProviderPayments = providerPayments.reduce((sum, p) => sum + p.amount, 0);
+    const netProfit = currentBudget - totalExpenses - totalProviderPayments;
     const isProfitPositive = netProfit >= 0;
 
     async function onSubmit(data: FormValues) {
@@ -156,11 +280,19 @@ export function EditCampaignDialog({
         formData.append("id", campaign.id);
         formData.append("title", data.title);
         formData.append("brand_name", data.brand_name);
+        formData.append("brand_id", data.brand_id || "");
         formData.append("budget", data.budget);
         formData.append("deadline", data.deadline);
         formData.append("status", campaign.status);
         formData.append("tags", JSON.stringify(data.tags || []));
-        formData.append("platform", data.platform || "");
+
+        if (contractLinks.length > 0) formData.append("contract_links", JSON.stringify(contractLinks));
+        if (data.notes) formData.append("notes", data.notes);
+
+        // Combine platforms
+        const rawPlatforms = [...selectedPlatforms, ...customPlatforms];
+        const finalPlatforms = rawPlatforms.filter(p => !!p && p.trim() !== "" && p.toLowerCase() !== "otro");
+        formData.append("platforms", JSON.stringify(finalPlatforms));
 
         // Financials
         formData.append("payment_status", data.payment_status || "pending");
@@ -230,7 +362,7 @@ export function EditCampaignDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Gestionar Campaña</DialogTitle>
                     <DialogDescription>
@@ -238,10 +370,19 @@ export function EditCampaignDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <form onSubmit={handleSubmit(onSubmit)}>
+                <form onSubmit={handleSubmit(onSubmit as any)}>
                     <Tabs defaultValue="details" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2 mb-4">
+                        <TabsList className="grid w-full grid-cols-3 mb-4">
                             <TabsTrigger value="details">Detalles</TabsTrigger>
+                            <TabsTrigger value="tasks" className="gap-1">
+                                <ListChecks className="h-3.5 w-3.5" />
+                                Tareas
+                                {tasks.length > 0 && (
+                                    <span className="text-[10px] text-muted-foreground ml-0.5">
+                                        ({tasks.filter(t => t.is_completed).length}/{tasks.length})
+                                    </span>
+                                )}
+                            </TabsTrigger>
                             <TabsTrigger value="finance">Finanzas</TabsTrigger>
                         </TabsList>
 
@@ -256,9 +397,40 @@ export function EditCampaignDialog({
                             {/* Brand & Budget Row */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="edit-brand">Marca</Label>
-                                    <Input id="edit-brand" disabled={isLoading} {...register("brand_name")} />
-                                    {errors.brand_name && <p className="text-sm text-destructive">{errors.brand_name.message}</p>}
+                                    <Label>Marca *</Label>
+                                    <Controller
+                                        control={control}
+                                        name="brand_id"
+                                        render={({ field }) => (
+                                            <Select
+                                                onValueChange={(val) => {
+                                                    field.onChange(val);
+                                                    const selected = brands.find(b => b.id === val);
+                                                    if (selected) setValue("brand_name", selected.name);
+                                                }}
+                                                value={field.value}
+                                                disabled={isLoading}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Seleccionar marca..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {brands.length === 0 ? (
+                                                        <SelectItem value="__empty" disabled>
+                                                            No hay marcas
+                                                        </SelectItem>
+                                                    ) : (
+                                                        brands.map((brand) => (
+                                                            <SelectItem key={brand.id} value={brand.id}>
+                                                                {brand.name}
+                                                            </SelectItem>
+                                                        ))
+                                                    )}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
+                                    {errors.brand_id && <p className="text-sm text-destructive">{errors.brand_id.message}</p>}
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="edit-budget">Presupuesto ($)</Label>
@@ -267,29 +439,156 @@ export function EditCampaignDialog({
                                 </div>
                             </div>
 
-                            {/* Platform */}
-                            <div className="space-y-2">
-                                <Label>Plataforma</Label>
-                                <Controller
-                                    control={control}
-                                    name="platform"
-                                    render={({ field }) => (
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Seleccionar plataforma..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="instagram">Instagram</SelectItem>
-                                                <SelectItem value="tiktok">TikTok</SelectItem>
-                                                <SelectItem value="youtube">YouTube</SelectItem>
-                                                <SelectItem value="twitch">Twitch</SelectItem>
-                                                <SelectItem value="facebook">Facebook</SelectItem>
-                                                <SelectItem value="ugc">UGC</SelectItem>
-                                                <SelectItem value="other">Otro</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                            {/* Platforms (Múltiples Redes Sociales) */}
+                            <div className="space-y-3">
+                                <Label>Redes Sociales</Label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {platformOptions.map((platform) => (
+                                        <div key={platform} className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id={`edit-platform-${platform}`}
+                                                checked={selectedPlatforms.includes(platform)}
+                                                onCheckedChange={(checked: boolean) => {
+                                                    if (checked) {
+                                                        setSelectedPlatforms([...selectedPlatforms, platform]);
+                                                    } else {
+                                                        setSelectedPlatforms(selectedPlatforms.filter(p => p !== platform));
+                                                    }
+                                                }}
+                                                disabled={isLoading}
+                                            />
+                                            <Label htmlFor={`edit-platform-${platform}`} className="font-normal cursor-pointer text-sm">
+                                                {platform}
+                                            </Label>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Custom Platforms Input (Max 5) */}
+                                <div className="space-y-2 mt-2">
+                                    <Label className="text-xs text-muted-foreground">Plataformas extras ({customPlatforms.length}/5)</Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            placeholder="Añadir red social custom..."
+                                            value={currentCustomPlatform}
+                                            onChange={(e) => setCurrentCustomPlatform(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleAddCustomPlatform();
+                                                }
+                                            }}
+                                            disabled={isLoading || customPlatforms.length >= 5}
+                                            className="flex-1"
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={handleAddCustomPlatform}
+                                            disabled={isLoading || customPlatforms.length >= 5 || !currentCustomPlatform.trim()}
+                                        >
+                                            <Plus className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+
+                                    {/* Badges for custom platforms */}
+                                    {customPlatforms.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 pt-2">
+                                            {customPlatforms.map((platform) => (
+                                                <Badge key={platform} variant="secondary" className="pl-2 pr-1 py-1 flex items-center gap-1">
+                                                    {platform}
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-4 w-4 p-0 hover:bg-transparent text-muted-foreground hover:text-foreground"
+                                                        onClick={() => handleRemoveCustomPlatform(platform)}
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                    </Button>
+                                                </Badge>
+                                            ))}
+                                        </div>
                                     )}
+                                </div>
+                            </div>
+
+                            {/* Contract Links (Max 5) */}
+                            <div className="space-y-3">
+                                <Label htmlFor="edit-current_contract_link">Links de Contrato ({contractLinks.length}/5)</Label>
+                                <div className="flex gap-2">
+                                    <Input
+                                        id="edit-current_contract_link"
+                                        type="url"
+                                        placeholder="https://drive.google.com/..."
+                                        disabled={isLoading || contractLinks.length >= 5}
+                                        value={currentContractLink}
+                                        onChange={(e) => setCurrentContractLink(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleAddContractLink();
+                                            }
+                                        }}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={handleAddContractLink}
+                                        disabled={isLoading || contractLinks.length >= 5 || !currentContractLink.trim()}
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                </div>
+
+                                {errors.contract_links && (
+                                    <p className="text-sm text-destructive">
+                                        {errors.contract_links.message}
+                                    </p>
+                                )}
+
+                                {/* Contract Links List */}
+                                {contractLinks.length > 0 && (
+                                    <div className="space-y-2 mt-2">
+                                        {contractLinks.map((link, index) => (
+                                            <div key={index} className="flex items-center justify-between p-2 text-sm border rounded-md bg-muted/30 group">
+                                                <div className="flex items-center gap-2 overflow-hidden">
+                                                    <LinkIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                    <a href={link} target="_blank" rel="noopener noreferrer" className="truncate hover:underline text-blue-600 dark:text-blue-400">
+                                                        {link}
+                                                    </a>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 shrink-0"
+                                                    onClick={() => handleRemoveContractLink(link)}
+                                                >
+                                                    <Trash2 className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Notes */}
+                            <div className="space-y-2">
+                                <Label htmlFor="edit-notes">Notas</Label>
+                                <Textarea
+                                    id="edit-notes"
+                                    placeholder="Ej: No usar color rojo..."
+                                    disabled={isLoading}
+                                    {...register("notes")}
                                 />
+                                {errors.notes && (
+                                    <p className="text-sm text-destructive">
+                                        {errors.notes.message}
+                                    </p>
+                                )}
                             </div>
 
                             {/* Deadline */}
@@ -462,9 +761,15 @@ export function EditCampaignDialog({
                                             <span>${currentBudget.toFixed(2)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">(-) Gastos Totales</span>
+                                            <span className="text-muted-foreground">(-) Gastos Campaña</span>
                                             <span className="text-destructive">-${totalExpenses.toFixed(2)}</span>
                                         </div>
+                                        {totalProviderPayments > 0 && (
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground">(-) Pagos Proveedores</span>
+                                                <span className="text-destructive">-${totalProviderPayments.toFixed(2)}</span>
+                                            </div>
+                                        )}
                                         <div className="border-t my-2 pt-2 flex justify-between font-bold text-lg">
                                             <span>Beneficio Neto</span>
                                             <span className={`flex items-center gap-1 ${isProfitPositive ? "text-green-600" : "text-red-600"}`}>
@@ -567,6 +872,170 @@ export function EditCampaignDialog({
                                         ))
                                     )}
                                 </div>
+                            </div>
+
+                            {/* D. Provider Payments (Read-Only) */}
+                            {providerPayments.length > 0 && (
+                                <div className="space-y-3">
+                                    <h4 className="text-sm font-medium flex items-center gap-2">
+                                        <Users className="w-4 h-4" /> Pagos a Equipo / Proveedores
+                                    </h4>
+                                    <div className="space-y-1 max-h-[150px] overflow-y-auto pr-1">
+                                        {providerPayments.map((payment) => (
+                                            <div key={payment.id} className="flex items-center justify-between text-sm p-2 bg-muted/50 border border-dashed rounded">
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium">
+                                                        🔧 {payment.provider_name}
+                                                    </span>
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                        {payment.description} · {new Date(payment.payment_date).toLocaleDateString("es-CO", { month: "short", day: "numeric" })}
+                                                    </span>
+                                                </div>
+                                                <span className="font-mono text-destructive">
+                                                    -${payment.amount.toFixed(2)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <a
+                                        href="/dashboard/directory?tab=providers"
+                                        target="_blank"
+                                        className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
+                                    >
+                                        <ExternalLink className="h-3 w-3" />
+                                        Gestionado desde el Directorio
+                                    </a>
+                                </div>
+                            )}
+                        </TabsContent>
+
+                        {/* TAB: TAREAS (Checklist) */}
+                        <TabsContent value="tasks" className="space-y-4">
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-medium flex items-center gap-2">
+                                    <ListChecks className="w-4 h-4" /> Checklist de la Campaña
+                                </h4>
+
+                                {/* Add Task Input */}
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="Ej: Hacer fotos, Enviar borrador..."
+                                        value={newTaskTitle}
+                                        onChange={(e) => setNewTaskTitle(e.target.value)}
+                                        onKeyDown={async (e) => {
+                                            if (e.key === "Enter") {
+                                                e.preventDefault();
+                                                if (!newTaskTitle.trim()) return;
+                                                const result = await addCampaignTask(campaign.id, newTaskTitle);
+                                                if (result.data) {
+                                                    setTasks(prev => [...prev, result.data as CampaignTask]);
+                                                    setNewTaskTitle("");
+                                                } else if (result.error) {
+                                                    toast.error(result.error);
+                                                }
+                                            }
+                                        }}
+                                        className="flex-1 h-8 text-sm px-3 rounded-md border border-input bg-background"
+                                    />
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        className="h-8 w-8 p-0"
+                                        onClick={async () => {
+                                            if (!newTaskTitle.trim()) return;
+                                            const result = await addCampaignTask(campaign.id, newTaskTitle);
+                                            if (result.data) {
+                                                setTasks(prev => [...prev, result.data as CampaignTask]);
+                                                setNewTaskTitle("");
+                                            } else if (result.error) {
+                                                toast.error(result.error);
+                                            }
+                                        }}
+                                    >
+                                        <Plus className="w-4 h-4" />
+                                    </Button>
+                                </div>
+
+                                {/* Task List */}
+                                <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1">
+                                    {tasksLoading ? (
+                                        <div className="text-xs text-center py-4 text-muted-foreground">
+                                            <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
+                                            Cargando tareas...
+                                        </div>
+                                    ) : tasks.length === 0 ? (
+                                        <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
+                                            <ListChecks className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                                            <p className="text-xs">Sin tareas aún. Añade tu primera tarea arriba.</p>
+                                        </div>
+                                    ) : (
+                                        tasks.map((task) => (
+                                            <div
+                                                key={task.id}
+                                                className="flex items-center gap-3 p-2 rounded-md border bg-background group hover:bg-muted/50 transition-colors"
+                                            >
+                                                <Checkbox
+                                                    checked={task.is_completed}
+                                                    onCheckedChange={async (checked) => {
+                                                        // Optimistic update
+                                                        setTasks(prev =>
+                                                            prev.map(t =>
+                                                                t.id === task.id ? { ...t, is_completed: !!checked } : t
+                                                            )
+                                                        );
+                                                        const result = await toggleTaskCompletion(task.id, !!checked);
+                                                        if (result.error) {
+                                                            // Revert on error
+                                                            setTasks(prev =>
+                                                                prev.map(t =>
+                                                                    t.id === task.id ? { ...t, is_completed: !checked } : t
+                                                                )
+                                                            );
+                                                            toast.error("Error al actualizar la tarea");
+                                                        }
+                                                    }}
+                                                />
+                                                <span
+                                                    className={`flex-1 text-sm transition-all ${task.is_completed
+                                                        ? "line-through text-muted-foreground"
+                                                        : "text-foreground"
+                                                        }`}
+                                                >
+                                                    {task.title}
+                                                </span>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive hover:bg-destructive/10 transition-opacity"
+                                                    onClick={async () => {
+                                                        // Optimistic delete
+                                                        setTasks(prev => prev.filter(t => t.id !== task.id));
+                                                        const result = await deleteCampaignTask(task.id);
+                                                        if (result.error) {
+                                                            toast.error("Error al eliminar la tarea");
+                                                            const data = await getCampaignTasks(campaign.id);
+                                                            setTasks(data as CampaignTask[]);
+                                                        }
+                                                    }}
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                </Button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                {/* Progress Summary */}
+                                {tasks.length > 0 && (
+                                    <div className="text-xs text-muted-foreground text-center pt-2 border-t">
+                                        {tasks.filter(t => t.is_completed).length} de {tasks.length} completadas
+                                        {tasks.filter(t => t.is_completed).length === tasks.length && (
+                                            <span className="ml-1 text-emerald-600 font-medium">— ¡Todo listo! ✅</span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </TabsContent>
                     </Tabs>

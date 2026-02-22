@@ -11,6 +11,8 @@ import {
     Settings,
     LogOut,
     LayoutTemplate,
+    Lightbulb,
+    BookUser,
     X,
 } from "lucide-react";
 
@@ -27,7 +29,9 @@ interface NavItem {
 
 const mainNavItems: NavItem[] = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+    { label: "Banco de Ideas", href: "/dashboard/ideas", icon: Lightbulb },
     { label: "Campañas", href: "/dashboard/campaigns", icon: Kanban },
+    { label: "Directorio", href: "/dashboard/directory", icon: BookUser },
     { label: "Finanzas", href: "/dashboard/finance", icon: DollarSign },
     { label: "Equipo", href: "/dashboard/team", icon: Users, agencyOnly: true },
     { label: "Perfil Público", href: "/dashboard/public-profile", icon: LayoutTemplate },

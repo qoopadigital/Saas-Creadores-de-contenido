@@ -22,6 +22,7 @@ import {
     Timer,
 } from "lucide-react";
 import { getDashboardOverview, getRecentExpenses } from "./actions";
+import { UpcomingDeadlines } from "@/components/dashboard/upcoming-deadlines";
 
 function formatCurrency(amount: number) {
     return new Intl.NumberFormat("es-CO", {
@@ -63,6 +64,7 @@ const CATEGORY_ICONS: Record<string, any> = {
     software: "💻",
     equipment: "📸",
     tax: "🏦",
+    provider: "🔧",
     other: "📦",
 };
 
@@ -76,6 +78,7 @@ export default async function DashboardPage() {
     const netProfit = overviewData?.netProfit ?? 0;
     const hourlyRate = overviewData?.hourlyRate ?? 0;
     const lastCampaigns = overviewData?.lastCampaigns ?? [];
+    const allCampaigns = overviewData?.allCampaigns ?? [];
 
     const summaryCards = [
         {
@@ -113,7 +116,7 @@ export default async function DashboardPage() {
         },
         {
             title: "Valor de tu Hora",
-            value: `${formatCurrency(hourlyRate)}/h`,
+            value: `$${hourlyRate.toFixed(2)}/h`,
             description: "Basado en tus horas registradas",
             icon: Timer,
             color: hourlyRate > 0 ? "text-violet-500" : "text-muted-foreground",
@@ -177,10 +180,10 @@ export default async function DashboardPage() {
             </div>
 
             {/* Activity & Expenses Split */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-7 gap-6">
 
-                {/* Recent Activity (2/3) */}
-                <Card className="lg:col-span-2">
+                {/* Recent Activity (4/7) */}
+                <Card className="lg:col-span-4">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div>
                             <CardTitle className="text-base">Actividad Reciente</CardTitle>
@@ -251,8 +254,8 @@ export default async function DashboardPage() {
                     </CardContent>
                 </Card>
 
-                {/* Recent Expenses (1/3) */}
-                <Card>
+                {/* Recent Expenses (3/7) */}
+                <Card className="lg:col-span-3">
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
                         <CardTitle className="text-base">Gastos Recientes</CardTitle>
                         <Link href="/dashboard/finance">
@@ -289,6 +292,11 @@ export default async function DashboardPage() {
                         )}
                     </CardContent>
                 </Card>
+            </div>
+
+            {/* Upcoming Deadlines (Full Width) */}
+            <div className="mt-6 w-full">
+                <UpcomingDeadlines campaigns={allCampaigns} />
             </div>
         </div>
     );

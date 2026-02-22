@@ -84,6 +84,7 @@ export default async function FinancePage({ searchParams }: PageProps) {
                         totalRevenue={data.totalRevenue}
                         pendingAmount={data.pendingAmount}
                         totalExpenses={data.totalExpenses}
+                        providerExpenses={data.providerExpenses}
                         netProfit={data.netProfit}
                     />
 

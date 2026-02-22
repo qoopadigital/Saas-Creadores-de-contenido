@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Draggable } from "@hello-pangea/dnd";
-import { CalendarDays, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Archive, CalendarDays, MoreHorizontal, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
-import { deleteCampaign } from "@/app/(dashboard)/dashboard/campaigns/actions";
+import { archiveCampaign } from "@/app/(dashboard)/dashboard/campaigns/actions";
 import { TAG_COLORS } from "@/components/ui/color-tags-input";
+import type { Brand } from "@/types/database.types";
 
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,16 +18,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+// Removed AlertDialog imports
 
 import { EditCampaignDialog } from "./edit-campaign-dialog";
 
@@ -46,12 +38,22 @@ export interface CampaignData {
     payment_method?: string | null;
     actual_hours?: number | null;
     total_expenses?: number;
+    // Tasks
+    tasks_total?: number;
+    tasks_completed?: number;
+    // Extras
+    contract_links?: string[];
+    notes?: string | null;
+    platforms?: string[];
+    // Directory link
+    brand_id?: string | null;
 }
 
 interface KanbanCardProps {
     campaign: CampaignData;
     index: number;
     onDelete: (id: string) => void;
+    brands?: Brand[];
 }
 
 function formatCurrency(amount: number) {
@@ -69,27 +71,31 @@ function formatDate(dateStr: string) {
     });
 }
 
-import { Clock, DollarSign, FileText } from "lucide-react"; // Start adding imports
+import { Clock, DollarSign, FileText, CheckSquare } from "lucide-react"; // Start adding imports
 
-export function KanbanCard({ campaign, index, onDelete }: KanbanCardProps) {
+export function KanbanCard({ campaign, index, onDelete, brands = [] }: KanbanCardProps) {
     const [editOpen, setEditOpen] = useState(false);
-    const [deleteOpen, setDeleteOpen] = useState(false);
-    const [isDeleting, setIsDeleting] = useState(false);
 
-    async function handleDelete() {
-        setIsDeleting(true);
-        const result = await deleteCampaign(campaign.id);
+    const [isArchiving, setIsArchiving] = useState(false);
+
+    async function handleArchive() {
+        setIsArchiving(true);
+        const result = await archiveCampaign(campaign.id);
 
         if (result?.error) {
-            toast.error("Error al eliminar la campaña", {
+            toast.error("Error al archivar la campaña", {
                 description: result.error,
             });
         } else {
-            toast.success("Campaña eliminada exitosamente");
+            toast.success("Campaña archivada exitosamente");
+            // If the parent needs to know, we could call an onArchive prop, 
+            // but the board relies on DND and will re-fetch or re-render automatically.
+            // Since onDelete removes it from local state, we should probably do the same.
+            // But since the server action calls revalidatePath, it should disappear on next render.
+            // To be safe and instant, we can call onDelete to remove it from UI immediately.
             onDelete(campaign.id);
         }
-        setIsDeleting(false);
-        setDeleteOpen(false);
+        setIsArchiving(false);
     }
 
     return (
@@ -137,11 +143,11 @@ export function KanbanCard({ campaign, index, onDelete }: KanbanCardProps) {
                                                 Editar
                                             </DropdownMenuItem>
                                             <DropdownMenuItem
-                                                className="text-destructive focus:text-destructive"
-                                                onClick={() => setDeleteOpen(true)}
+                                                onClick={handleArchive}
+                                                disabled={isArchiving}
                                             >
-                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                Eliminar
+                                                <Archive className="mr-2 h-4 w-4" />
+                                                Archivar
                                             </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
@@ -209,6 +215,21 @@ export function KanbanCard({ campaign, index, onDelete }: KanbanCardProps) {
                                             <span>-{formatCurrency(campaign.total_expenses)}</span>
                                         </div>
                                     ) : null}
+
+                                    {/* Tasks Progress Badge */}
+                                    {campaign.tasks_total && campaign.tasks_total > 0 ? (
+                                        <Badge
+                                            variant="secondary"
+                                            className={`text-[10px] h-5 px-1.5 gap-1 font-normal hover:bg-muted ${campaign.tasks_completed === campaign.tasks_total
+                                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                                    : "bg-muted text-muted-foreground"
+                                                }`}
+                                            title={`${campaign.tasks_completed}/${campaign.tasks_total} tareas completadas`}
+                                        >
+                                            <CheckSquare className="h-3 w-3" />
+                                            <span>{campaign.tasks_completed}/{campaign.tasks_total}</span>
+                                        </Badge>
+                                    ) : null}
                                 </div>
                             </CardFooter>
                         </Card>
@@ -221,31 +242,10 @@ export function KanbanCard({ campaign, index, onDelete }: KanbanCardProps) {
                 campaign={campaign}
                 open={editOpen}
                 onOpenChange={setEditOpen}
+                brands={brands}
             />
 
-            {/* Delete Confirmation */}
-            <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Esta acción no se puede deshacer.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>
-                            Cancelar
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleDelete}
-                            disabled={isDeleting}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                            {isDeleting ? "Eliminando..." : "Eliminar"}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+
         </>
     );
 }

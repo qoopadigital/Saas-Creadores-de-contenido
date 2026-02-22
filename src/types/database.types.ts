@@ -95,6 +95,23 @@ export interface Campaign {
     payment_terms: number; // Days
     actual_hours: number | null;
     platform_breakdown: { [key: string]: number } | null;
+    // New Extra Fields
+    contract_links?: string[];
+    notes?: string | null;
+    platforms?: string[];
+    is_archived?: boolean | null;
+}
+
+export interface ContentIdea {
+    id: string;
+    user_id: string;
+    title: string;
+    description: string;
+    platforms: string[];
+    color: string;
+    is_ai_generated: boolean;
+    status: string; // 'draft' | 'favorite' | 'archived'
+    created_at: string;
 }
 
 export interface Expense {
@@ -108,4 +125,46 @@ export interface Expense {
     receipt_url: string | null;
     created_at: string;
     updated_at: string;
+}
+
+export interface Brand {
+    id: string;
+    user_id: string;
+    name: string;
+    contact_info: string | null;
+    payment_terms: string | null;
+    guidelines: string | null;
+    rating: number | null;
+    created_at: string;
+}
+
+export interface Provider {
+    id: string;
+    user_id: string;
+    name: string;
+    role: string | null;
+    contact_info: string | null;
+    created_at: string;
+}
+
+export interface ProviderPayment {
+    id: string;
+    user_id: string;
+    provider_id: string;
+    campaign_id: string | null;
+    amount: number;
+    description: string;
+    payment_date: string;
+    created_at: string;
+    // Joined fields (optional, populated via select)
+    campaign_title?: string;
+}
+
+export interface CampaignTask {
+    id: string;
+    campaign_id: string;
+    user_id: string;
+    title: string;
+    is_completed: boolean;
+    created_at: string;
 }

@@ -37,6 +37,7 @@ import { calculateHourlyRate, FinancialCampaign, Expense } from "@/lib/utils/fin
 export interface FinancialData {
     totalRevenue: number;
     totalExpenses: number;
+    providerExpenses: number;
     netProfit: number;
     pendingAmount: number;
     pipelineValue: number;
@@ -81,8 +82,8 @@ export async function getFinancialData(year?: number, month?: number): Promise<{
         return { data: null, error: "No autenticado" };
     }
 
-    // Parallel fetch: Campaigns & Expenses
-    const [campaignsResult, expensesResult] = await Promise.all([
+    // Parallel fetch: Campaigns, Expenses & Provider Payments
+    const [campaignsResult, expensesResult, providerPaymentsResult] = await Promise.all([
         supabase
             .from("campaigns")
             .select("*")
@@ -93,7 +94,13 @@ export async function getFinancialData(year?: number, month?: number): Promise<{
             .from("expenses")
             .select("*")
             .eq("user_id", user.id)
-            .order("date", { ascending: false })
+            .order("date", { ascending: false }),
+
+        supabase
+            .from("provider_payments")
+            .select("*, providers(name)")
+            .eq("user_id", user.id)
+            .order("payment_date", { ascending: false }),
     ]);
 
     if (campaignsResult.error) return { data: null, error: campaignsResult.error.message };
@@ -102,6 +109,8 @@ export async function getFinancialData(year?: number, month?: number): Promise<{
     const allCampaigns = campaignsResult.data as CampaignRow[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const allExpenses = expensesResult.data as any[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allProviderPayments = (providerPaymentsResult.data || []) as any[];
 
     // Filter by Date (Year/Month) if provided
     // Default: If no year provided, maybe show all? Or current year?
@@ -119,6 +128,16 @@ export async function getFinancialData(year?: number, month?: number): Promise<{
     const expenses = allExpenses.filter(e => {
         if (!year && month === undefined) return true;
         const d = new Date(e.date);
+        const y = d.getFullYear();
+        const m = d.getMonth();
+        if (year && y !== year) return false;
+        if (month !== undefined && m !== (month - 1)) return false;
+        return true;
+    });
+
+    const providerPayments = allProviderPayments.filter(p => {
+        if (!year && month === undefined) return true;
+        const d = new Date(p.payment_date);
         const y = d.getFullYear();
         const m = d.getMonth();
         if (year && y !== year) return false;
@@ -153,7 +172,9 @@ export async function getFinancialData(year?: number, month?: number): Promise<{
         { totalRevenue: 0, pendingAmount: 0, pipelineValue: 0 }
     );
 
-    const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+    const campaignExpensesTotal = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+    const providerExpensesTotal = providerPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const totalExpenses = campaignExpensesTotal + providerExpensesTotal;
     const netProfit = totalRevenue - totalExpenses;
 
     // Helper for grouping
@@ -173,6 +194,10 @@ export async function getFinancialData(year?: number, month?: number): Promise<{
         const cat = e.category || "other";
         expensesByCategoryMap[cat] = (expensesByCategoryMap[cat] || 0) + Number(e.amount);
     });
+    // Add provider payments as "Proveedores" category
+    if (providerExpensesTotal > 0) {
+        expensesByCategoryMap["Proveedores"] = (expensesByCategoryMap["Proveedores"] || 0) + providerExpensesTotal;
+    }
 
     const expensesByCategory = groupData(
         Object.entries(expensesByCategoryMap).map(([name, value]) => ({ name, value }))
@@ -184,8 +209,25 @@ export async function getFinancialData(year?: number, month?: number): Promise<{
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if ((c as any).payment_status === "paid") {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const platform = (c as any).platform || "other";
-            incomeByPlatformMap[platform] = (incomeByPlatformMap[platform] || 0) + (c.budget || 0);
+            const rawPlatforms = (c as any).platforms || [];
+
+            // Purge "Otro" and empty strings, clean whitespace
+            const validPlatforms = Array.isArray(rawPlatforms)
+                ? rawPlatforms
+                    .map(p => typeof p === 'string' ? p.trim() : '')
+                    .filter(p => p !== '' && p.toLowerCase() !== 'otro')
+                : [];
+
+            if (validPlatforms.length > 0) {
+                // Split budget equally among platforms
+                const splitBudget = (c.budget || 0) / validPlatforms.length;
+                validPlatforms.forEach((p: string) => {
+                    const capitalizedPlatform = p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+                    incomeByPlatformMap[capitalizedPlatform] = (incomeByPlatformMap[capitalizedPlatform] || 0) + splitBudget;
+                });
+            } else {
+                incomeByPlatformMap["Otro"] = (incomeByPlatformMap["Otro"] || 0) + (c.budget || 0);
+            }
         }
     });
 
@@ -225,6 +267,13 @@ export async function getFinancialData(year?: number, month?: number): Promise<{
         const date = new Date(e.date);
         const key = `${date.getFullYear()}-${String(date.getMonth()).padStart(2, "0")}`;
         monthExpenses[key] = (monthExpenses[key] ?? 0) + Number(e.amount);
+    });
+
+    // Include provider payments in monthly expenses
+    providerPayments.forEach((p) => {
+        const date = new Date(p.payment_date);
+        const key = `${date.getFullYear()}-${String(date.getMonth()).padStart(2, "0")}`;
+        monthExpenses[key] = (monthExpenses[key] ?? 0) + Number(p.amount);
     });
 
     // Build last 6 months
@@ -268,12 +317,33 @@ export async function getFinancialData(year?: number, month?: number): Promise<{
             status: c.payment_status || undefined // Ensure string | undefined
         }));
 
+    // Build combined expenses list (campaign expenses + provider payments)
+    const providerPaymentExpenses = providerPayments.map((p: any) => ({
+        id: p.id,
+        description: `🔧 ${p.providers?.name || "Proveedor"}: ${p.description}`,
+        amount: Number(p.amount),
+        category: "Proveedores",
+        date: p.payment_date,
+    }));
+
+    const allExpenseItems = [
+        ...expenses.map((e: any) => ({
+            id: e.id,
+            description: e.description,
+            amount: Number(e.amount),
+            category: e.category || "other",
+            date: e.date,
+        })),
+        ...providerPaymentExpenses,
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
     return {
         data: {
             totalRevenue,
             pendingAmount,
-            pipelineValue, // Keeping this for backward compat if needed, or remove
+            pipelineValue,
             totalExpenses,
+            providerExpenses: providerExpensesTotal,
             netProfit,
             monthlyData,
             expensesByCategory,
@@ -283,7 +353,7 @@ export async function getFinancialData(year?: number, month?: number): Promise<{
             averageHourlyRate,
             recentInvoices,
             campaigns,
-            expenses,
+            expenses: allExpenseItems,
         },
         error: null,
     };
