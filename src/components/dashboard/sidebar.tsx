@@ -19,6 +19,7 @@ import {
 import { signOut } from "@/app/(auth)/actions";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ModeToggle } from "@/components/mode-toggle";
 
 interface NavItem {
     label: string;
@@ -138,6 +139,8 @@ export function Sidebar({ userRole, isCollapsed, isMobileOpen, onCloseMobile }: 
                             {!isCollapsed && <span className="text-sm font-medium truncate">{item.label}</span>}
                         </Link>
                     ))}
+
+                    <ModeToggle isCollapsed={isCollapsed} />
 
                     <form action={signOut}>
                         <Button

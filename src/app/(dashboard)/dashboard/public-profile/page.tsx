@@ -15,7 +15,7 @@ export default async function PublicProfilePage() {
 
     const { data: profile } = await supabase
         .from("profiles")
-        .select("id, username, bio, avatar_url, full_name, selected_template, social_links, featured_content")
+        .select("id, username, bio, avatar_url, full_name, selected_template, social_links, featured_content, portfolio_videos, portfolio_text_1, portfolio_text_2, portfolio_text_3")
         .eq("id", user.id)
         .single();
 
@@ -32,6 +32,10 @@ export default async function PublicProfilePage() {
         selected_template: profile.selected_template || "simple",
         social_links: profile.social_links as Record<string, string> | undefined,
         featured_content: profile.featured_content as string[] | undefined,
+        portfolio_videos: profile.portfolio_videos as { tiktok: string[]; instagram: string[]; youtube: string[] } | undefined,
+        portfolio_text_1: (profile.portfolio_text_1 as string) || "",
+        portfolio_text_2: (profile.portfolio_text_2 as string) || "",
+        portfolio_text_3: (profile.portfolio_text_3 as string) || "",
     };
 
     return (

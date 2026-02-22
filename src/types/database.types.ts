@@ -60,7 +60,15 @@ export interface Profile {
         // ... allow other keys
         [key: string]: string | undefined;
     } | null;
-    featured_content: string[] | null; // Array of URLs
+    featured_content: string[] | null; // Legacy flat array of URLs
+    portfolio_videos: {
+        tiktok: string[];
+        instagram: string[];
+        youtube: string[];
+    } | null;
+    portfolio_text_1: string | null;
+    portfolio_text_2: string | null;
+    portfolio_text_3: string | null;
 }
 
 export interface Agency {

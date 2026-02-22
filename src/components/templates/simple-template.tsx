@@ -3,8 +3,9 @@
 import { Instagram, Youtube, Mail } from "lucide-react";
 import { TikTokEmbed, InstagramEmbed, YouTubeEmbed } from "react-social-media-embed";
 import { ClientOnly } from "@/components/ui/client-only";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// Custom Icon for TikTok (Lucide doesn't have it yet, or use a generic one)
+// Custom Icon for TikTok
 function TikTokIcon({ className }: { className?: string }) {
     return (
         <svg
@@ -31,14 +32,37 @@ interface Profile {
     avatar_url: string;
     social_links?: { [key: string]: string | undefined } | null;
     featured_content?: string[] | null;
+    portfolio_videos?: { tiktok: string[]; instagram: string[]; youtube: string[] } | null;
+    portfolio_text_1?: string | null;
+    portfolio_text_2?: string | null;
+    portfolio_text_3?: string | null;
     email?: string;
 }
 
 export function SimpleTemplate({ profile }: { profile: Profile }) {
     const socials = profile.social_links || {};
-    const videos = profile.featured_content || [];
 
-    // Helper to detect video platform
+    // Per-platform videos (prefer portfolio_videos, fallback to featured_content auto-detect)
+    const pv = profile.portfolio_videos || { tiktok: [], instagram: [], youtube: [] };
+
+    // If portfolio_videos is empty but featured_content has data, auto-categorize
+    const hasPlatformVideos = pv.tiktok.length > 0 || pv.instagram.length > 0 || pv.youtube.length > 0;
+    let tiktokVideos = pv.tiktok;
+    let instagramVideos = pv.instagram;
+    let youtubeVideos = pv.youtube;
+
+    if (!hasPlatformVideos && profile.featured_content && profile.featured_content.length > 0) {
+        tiktokVideos = profile.featured_content.filter(u => u.includes("tiktok.com"));
+        instagramVideos = profile.featured_content.filter(u => u.includes("instagram.com"));
+        youtubeVideos = profile.featured_content.filter(u => u.includes("youtube.com") || u.includes("youtu.be"));
+    }
+
+    const platformTabs = [
+        { key: "tiktok", label: "TikTok", icon: <TikTokIcon className="w-4 h-4" />, videos: tiktokVideos },
+        { key: "instagram", label: "Instagram", icon: <Instagram className="w-4 h-4" />, videos: instagramVideos },
+        { key: "youtube", label: "YouTube", icon: <Youtube className="w-4 h-4" />, videos: youtubeVideos },
+    ].filter(tab => tab.videos.length > 0);
+
     const getEmbedComponent = (url: string) => {
         if (url.includes("tiktok.com")) {
             return <TikTokEmbed url={url} width="100%" />;
@@ -57,6 +81,9 @@ export function SimpleTemplate({ profile }: { profile: Profile }) {
             </div>
         );
     };
+
+    // Find the first platform with videos for the default tab
+    const defaultTab = platformTabs.length > 0 ? platformTabs[0].key : "tiktok";
 
     return (
         <div className="min-h-screen bg-background text-foreground flex flex-col font-sans">
@@ -118,21 +145,63 @@ export function SimpleTemplate({ profile }: { profile: Profile }) {
                     )}
                 </div>
 
-                {/* Featured Content Grid */}
-                {videos.length > 0 && (
-                    <div className="space-y-6">
+                {/* Portfolio Text 1 — Top */}
+                {profile.portfolio_text_1 && (
+                    <div className="text-center max-w-2xl mx-auto px-4">
+                        <p className="text-sm sm:text-base text-muted-foreground italic leading-relaxed whitespace-pre-wrap">
+                            {profile.portfolio_text_1}
+                        </p>
+                    </div>
+                )}
+
+                {/* Featured Content — Platform Tabs */}
+                {platformTabs.length > 0 && (
+                    <div className="space-y-4">
                         <h2 className="text-center text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                            Destacados
+                            Portfolio
                         </h2>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {videos.map((url, idx) => (
-                                <div key={idx} className="rounded-xl overflow-hidden shadow-sm border bg-card">
-                                    <ClientOnly>
-                                        {getEmbedComponent(url)}
-                                    </ClientOnly>
-                                </div>
+                        <Tabs defaultValue={defaultTab} className="w-full">
+                            <TabsList className={`grid w-full grid-cols-${platformTabs.length} max-w-md mx-auto`}>
+                                {platformTabs.map((tab) => (
+                                    <TabsTrigger key={tab.key} value={tab.key} className="gap-2">
+                                        {tab.icon}
+                                        {tab.label}
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+
+                            {platformTabs.map((tab) => (
+                                <TabsContent key={tab.key} value={tab.key}>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                                        {tab.videos.map((url, idx) => (
+                                            <div key={idx} className="rounded-xl overflow-hidden shadow-sm border bg-card">
+                                                <ClientOnly>
+                                                    {getEmbedComponent(url)}
+                                                </ClientOnly>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </TabsContent>
                             ))}
-                        </div>
+                        </Tabs>
+                    </div>
+                )}
+
+                {/* Portfolio Text 2 — Middle */}
+                {profile.portfolio_text_2 && (
+                    <div className="text-center max-w-2xl mx-auto px-4">
+                        <p className="text-sm sm:text-base text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                            {profile.portfolio_text_2}
+                        </p>
+                    </div>
+                )}
+
+                {/* Portfolio Text 3 — Above CTA */}
+                {profile.portfolio_text_3 && (
+                    <div className="text-center max-w-2xl mx-auto px-4">
+                        <p className="text-sm sm:text-base font-medium leading-relaxed whitespace-pre-wrap">
+                            {profile.portfolio_text_3}
+                        </p>
                     </div>
                 )}
 

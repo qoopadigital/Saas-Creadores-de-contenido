@@ -25,7 +25,7 @@ export default async function MediaKitPage({
     // 1. Find profile by username
     const { data: profile } = await supabase
         .from("profiles")
-        .select("id, username, full_name, bio, avatar_url, email, selected_template, social_links, featured_content")
+        .select("id, username, full_name, bio, avatar_url, email, selected_template, social_links, featured_content, portfolio_videos, portfolio_text_1, portfolio_text_2, portfolio_text_3")
         .eq("username", username)
         .single();
 
@@ -38,9 +38,11 @@ export default async function MediaKitPage({
         ...profile,
         social_links: profile.social_links as { [key: string]: string | undefined } | null,
         featured_content: profile.featured_content as string[] | null,
+        portfolio_videos: profile.portfolio_videos as { tiktok: string[]; instagram: string[]; youtube: string[] } | null,
+        portfolio_text_1: (profile.portfolio_text_1 as string) || null,
+        portfolio_text_2: (profile.portfolio_text_2 as string) || null,
+        portfolio_text_3: (profile.portfolio_text_3 as string) || null,
     };
 
-    // In the future, we can switch templates based on typedProfile.selected_template
-    // For now, we only have 'simple'
     return <SimpleTemplate profile={typedProfile} />;
 }

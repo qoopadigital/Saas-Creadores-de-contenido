@@ -190,3 +190,40 @@ export async function getRecentExpenses(): Promise<RecentExpense[]> {
 
     return combined;
 }
+
+// ---- Global Pending Tasks (for Dashboard Widget) ----
+export interface PendingTask {
+    id: string;
+    title: string;
+    campaign_id: string;
+    campaign_title: string;
+    created_at: string;
+}
+
+export async function getGlobalPendingTasks(limit = 5): Promise<PendingTask[]> {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+        .from("campaign_tasks")
+        .select("id, title, campaign_id, created_at, campaigns(title)")
+        .eq("user_id", user.id)
+        .eq("is_completed", false)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+    if (error) {
+        console.error("Error fetching global pending tasks:", error);
+        return [];
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data || []).map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        campaign_id: t.campaign_id,
+        campaign_title: t.campaigns?.title || "Campaña",
+        created_at: t.created_at,
+    }));
+}

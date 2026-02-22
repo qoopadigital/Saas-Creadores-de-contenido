@@ -25,10 +25,26 @@ const profileSchema = z.object({
         .optional()
         .or(z.literal("")),
 
-    // New fields
+    // Template
     selected_template: z.literal("simple").optional(),
-    social_links: z.record(z.string(), z.string().optional()).optional(), // { instagram: 'user', ... }
+
+    // Social Links
+    social_links: z.record(z.string(), z.string().optional()).optional(),
+
+    // Legacy flat content (still accepted for backwards compat)
     featured_content: z.array(z.string().url("Debe ser una URL válida")).optional(),
+
+    // New: Per-platform videos
+    portfolio_videos: z.object({
+        tiktok: z.array(z.string().url()).default([]),
+        instagram: z.array(z.string().url()).default([]),
+        youtube: z.array(z.string().url()).default([]),
+    }).optional(),
+
+    // New: Portfolio text blocks
+    portfolio_text_1: z.string().max(500).optional().or(z.literal("")),
+    portfolio_text_2: z.string().max(500).optional().or(z.literal("")),
+    portfolio_text_3: z.string().max(500).optional().or(z.literal("")),
 });
 
 export async function updateProfile(formData: FormData) {
@@ -66,6 +82,19 @@ export async function updateProfile(formData: FormData) {
         }
     }
 
+    if (formData.has("portfolio_videos")) {
+        try {
+            rawData.portfolio_videos = JSON.parse(formData.get("portfolio_videos") as string);
+        } catch {
+            return { error: "Formato de videos de portfolio inválido" };
+        }
+    }
+
+    // Text fields
+    if (formData.has("portfolio_text_1")) rawData.portfolio_text_1 = formData.get("portfolio_text_1");
+    if (formData.has("portfolio_text_2")) rawData.portfolio_text_2 = formData.get("portfolio_text_2");
+    if (formData.has("portfolio_text_3")) rawData.portfolio_text_3 = formData.get("portfolio_text_3");
+
     // Validate
     const parsed = profileSchema.safeParse(rawData);
 
@@ -74,6 +103,7 @@ export async function updateProfile(formData: FormData) {
     }
 
     // Build update payload
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updateData: Record<string, any> = {};
     if (parsed.data.username !== undefined) updateData.username = parsed.data.username;
     if (parsed.data.bio !== undefined) updateData.bio = parsed.data.bio || "";
@@ -82,6 +112,10 @@ export async function updateProfile(formData: FormData) {
     if (parsed.data.selected_template !== undefined) updateData.selected_template = parsed.data.selected_template;
     if (parsed.data.social_links !== undefined) updateData.social_links = parsed.data.social_links;
     if (parsed.data.featured_content !== undefined) updateData.featured_content = parsed.data.featured_content;
+    if (parsed.data.portfolio_videos !== undefined) updateData.portfolio_videos = parsed.data.portfolio_videos;
+    if (parsed.data.portfolio_text_1 !== undefined) updateData.portfolio_text_1 = parsed.data.portfolio_text_1 || "";
+    if (parsed.data.portfolio_text_2 !== undefined) updateData.portfolio_text_2 = parsed.data.portfolio_text_2 || "";
+    if (parsed.data.portfolio_text_3 !== undefined) updateData.portfolio_text_3 = parsed.data.portfolio_text_3 || "";
 
     if (Object.keys(updateData).length === 0) {
         return { success: true };

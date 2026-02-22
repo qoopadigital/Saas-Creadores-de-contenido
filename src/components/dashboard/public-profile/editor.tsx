@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, Save, ExternalLink, Smartphone, Lock, Plus, Trash2 } from "lucide-react";
+import { Loader2, Save, ExternalLink, Lock, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
-import Image from "next/image";
 
 import { updateProfile } from "@/app/(dashboard)/dashboard/public-profile/actions";
 
@@ -36,6 +35,10 @@ interface Profile {
     selected_template?: string;
     social_links?: { [key: string]: string | undefined } | null;
     featured_content?: string[] | null;
+    portfolio_videos?: { tiktok: string[]; instagram: string[]; youtube: string[] } | null;
+    portfolio_text_1?: string;
+    portfolio_text_2?: string;
+    portfolio_text_3?: string;
 }
 
 // ---- Schema ----
@@ -57,28 +60,37 @@ const formSchema = z.object({
     tiktok: z.string().optional().or(z.literal("")),
     youtube: z.string().optional().or(z.literal("")),
 
-    // Featured Videos
-    featured_videos: z.array(
-        z.object({
-            url: z.string().url("Debe ser una URL válida")
-        })
-    ).optional(),
+    // Portfolio text blocks
+    portfolio_text_1: z.string().max(500).optional().or(z.literal("")),
+    portfolio_text_2: z.string().max(500).optional().or(z.literal("")),
+    portfolio_text_3: z.string().max(500).optional().or(z.literal("")),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
+// Platform video config
+const PLATFORMS = [
+    { key: "tiktok" as const, label: "TikTok", placeholder: "https://www.tiktok.com/@user/video/...", max: 6 },
+    { key: "instagram" as const, label: "Instagram", placeholder: "https://www.instagram.com/reel/...", max: 6 },
+    { key: "youtube" as const, label: "YouTube", placeholder: "https://www.youtube.com/watch?v=...", max: 6 },
+];
+
 export function PublicProfileEditor({ profile }: { profile: Profile }) {
     const [isLoading, setIsLoading] = useState(false);
 
+    // Video state per platform
+    const defaultVideos = profile.portfolio_videos || { tiktok: [], instagram: [], youtube: [] };
+    const [platformVideos, setPlatformVideos] = useState<{ tiktok: string[]; instagram: string[]; youtube: string[] }>({
+        tiktok: defaultVideos.tiktok.length > 0 ? defaultVideos.tiktok : [""],
+        instagram: defaultVideos.instagram.length > 0 ? defaultVideos.instagram : [""],
+        youtube: defaultVideos.youtube.length > 0 ? defaultVideos.youtube : [""],
+    });
+
     // Initial values mapping
     const defaultSocials = profile.social_links || {};
-    const defaultVideos = (profile.featured_content || []).map(url => ({ url }));
-    // Ensure at least 3 video inputs if empty, or just use existing
-    const initialVideos = defaultVideos.length > 0 ? defaultVideos : [{ url: "" }, { url: "" }, { url: "" }];
 
     const {
         register,
-        control,
         handleSubmit,
         watch,
         setValue,
@@ -93,18 +105,37 @@ export function PublicProfileEditor({ profile }: { profile: Profile }) {
             instagram: defaultSocials.instagram || "",
             tiktok: defaultSocials.tiktok || "",
             youtube: defaultSocials.youtube || "",
-            featured_videos: initialVideos as { url: string }[],
+            portfolio_text_1: profile.portfolio_text_1 || "",
+            portfolio_text_2: profile.portfolio_text_2 || "",
+            portfolio_text_3: profile.portfolio_text_3 || "",
         },
-    });
-
-    const { fields: videoFields, append, remove } = useFieldArray({
-        control,
-        name: "featured_videos",
     });
 
     const watchTemplate = watch("selected_template");
     const watchAvatarUrl = watch("avatar_url");
     const initials = (profile.full_name || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+
+    // Video helpers
+    function updateVideoUrl(platform: "tiktok" | "instagram" | "youtube", index: number, value: string) {
+        setPlatformVideos(prev => ({
+            ...prev,
+            [platform]: prev[platform].map((v, i) => i === index ? value : v),
+        }));
+    }
+
+    function addVideoSlot(platform: "tiktok" | "instagram" | "youtube") {
+        setPlatformVideos(prev => ({
+            ...prev,
+            [platform]: [...prev[platform], ""],
+        }));
+    }
+
+    function removeVideoSlot(platform: "tiktok" | "instagram" | "youtube", index: number) {
+        setPlatformVideos(prev => ({
+            ...prev,
+            [platform]: prev[platform].filter((_, i) => i !== index),
+        }));
+    }
 
     async function onSubmit(data: FormValues) {
         setIsLoading(true);
@@ -115,18 +146,29 @@ export function PublicProfileEditor({ profile }: { profile: Profile }) {
         formData.append("avatar_url", data.avatar_url || "");
         formData.append("selected_template", data.selected_template);
 
-        // Prepare Social Links JSON
+        // Social Links
         const socialLinks: Record<string, string> = {};
         if (data.instagram) socialLinks.instagram = data.instagram;
         if (data.tiktok) socialLinks.tiktok = data.tiktok;
         if (data.youtube) socialLinks.youtube = data.youtube;
         formData.append("social_links", JSON.stringify(socialLinks));
 
-        // Prepare Featured Content Array
-        const featuredContent = (data.featured_videos || [])
-            .map(v => v.url)
-            .filter(url => url.length > 0);
-        formData.append("featured_content", JSON.stringify(featuredContent));
+        // Portfolio Videos (per-platform, cleaned)
+        const cleanVideos = {
+            tiktok: platformVideos.tiktok.filter(u => u.trim().length > 0),
+            instagram: platformVideos.instagram.filter(u => u.trim().length > 0),
+            youtube: platformVideos.youtube.filter(u => u.trim().length > 0),
+        };
+        formData.append("portfolio_videos", JSON.stringify(cleanVideos));
+
+        // Also save as flat featured_content for backwards compatibility
+        const allUrls = [...cleanVideos.tiktok, ...cleanVideos.instagram, ...cleanVideos.youtube];
+        formData.append("featured_content", JSON.stringify(allUrls));
+
+        // Portfolio texts
+        formData.append("portfolio_text_1", data.portfolio_text_1 || "");
+        formData.append("portfolio_text_2", data.portfolio_text_2 || "");
+        formData.append("portfolio_text_3", data.portfolio_text_3 || "");
 
         const result = await updateProfile(formData);
 
@@ -181,7 +223,6 @@ export function PublicProfileEditor({ profile }: { profile: Profile }) {
                                 onClick={() => setValue("selected_template", "simple")}
                             >
                                 <div className="h-56 overflow-hidden bg-muted rounded-lg w-full mb-4 flex flex-col items-center justify-center p-6 space-y-4">
-                                    {/* Schematic Preview */}
                                     <div className="h-12 w-12 rounded-full bg-foreground/10" />
                                     <div className="h-4 w-24 bg-foreground/10 rounded" />
                                     <div className="space-y-2 w-full">
@@ -202,7 +243,6 @@ export function PublicProfileEditor({ profile }: { profile: Profile }) {
                                     <Lock className="h-5 w-5 text-muted-foreground" />
                                 </div>
                                 <div className="h-56 overflow-hidden bg-muted rounded-lg w-full mb-4 flex p-2 gap-2">
-                                    {/* Schematic Bento */}
                                     <div className="flex-1 bg-foreground/5 rounded-lg flex flex-col gap-2 p-1">
                                         <div className="h-1/3 bg-foreground/10 rounded" />
                                         <div className="flex-1 bg-foreground/10 rounded" />
@@ -266,7 +306,7 @@ export function PublicProfileEditor({ profile }: { profile: Profile }) {
                                     </div>
                                     <div>
                                         <Label>Bio</Label>
-                                        <Input {...register("bio")} placeholder="Breve descrición..." />
+                                        <Input {...register("bio")} placeholder="Breve descripción..." />
                                     </div>
                                 </div>
                             </CardContent>
@@ -296,47 +336,124 @@ export function PublicProfileEditor({ profile }: { profile: Profile }) {
                             </CardContent>
                         </Card>
 
-                        {/* 3. Featured Videos */}
+                        {/* 3. Portfolio Texts */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Textos del Portfolio</CardTitle>
+                                <CardDescription>
+                                    Bloques de texto que aparecerán en tu Media Kit para guiar a las marcas.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label>Texto Superior</Label>
+                                    <Textarea
+                                        {...register("portfolio_text_1")}
+                                        placeholder="Ej: ¡Hola! Soy creadora de contenido especializada en lifestyle y moda..."
+                                        className="min-h-[80px]"
+                                    />
+                                    <p className="text-xs text-muted-foreground">Aparece debajo de tu bio, antes de los videos.</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Texto Intermedio</Label>
+                                    <Textarea
+                                        {...register("portfolio_text_2")}
+                                        placeholder="Ej: Mi comunidad es altamente comprometida con tasas de engagement del 5%..."
+                                        className="min-h-[80px]"
+                                    />
+                                    <p className="text-xs text-muted-foreground">Aparece después de los videos destacados.</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Texto de Cierre</Label>
+                                    <Textarea
+                                        {...register("portfolio_text_3")}
+                                        placeholder="Ej: ¿Interesado en colaborar? Escríbeme y hablemos del proyecto perfecto..."
+                                        className="min-h-[80px]"
+                                    />
+                                    <p className="text-xs text-muted-foreground">Aparece justo antes del botón de contacto.</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* 4. Videos por Plataforma */}
                         <Card>
                             <CardHeader>
                                 <CardTitle>Videos Destacados</CardTitle>
-                                <CardDescription>Muestra tus mejores TikToks, Reels o YouTube Shorts.</CardDescription>
+                                <CardDescription>
+                                    Organiza tus videos por plataforma. Máximo 6 por red social.
+                                </CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-4">
-                                {videoFields.map((field, index) => (
-                                    <div key={field.id} className="space-y-2">
-                                        <Label className="flex justify-between">
-                                            <span>Video {index + 1}</span>
-                                            {index > 2 && (
-                                                <button type="button" onClick={() => remove(index)} className="text-destructive text-xs hover:underline">
-                                                    Eliminar
-                                                </button>
+                            <CardContent>
+                                <Tabs defaultValue="tiktok" className="w-full">
+                                    <TabsList className="grid w-full grid-cols-3 mb-4">
+                                        <TabsTrigger value="tiktok">
+                                            TikTok
+                                            {platformVideos.tiktok.filter(u => u.trim()).length > 0 && (
+                                                <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">
+                                                    {platformVideos.tiktok.filter(u => u.trim()).length}
+                                                </Badge>
                                             )}
-                                        </Label>
-                                        <Input
-                                            {...register(`featured_videos.${index}.url` as const)}
-                                            placeholder="https://www.tiktok.com/@user/video/..."
-                                        />
-                                        {errors.featured_videos?.[index]?.url && (
-                                            <p className="text-destructive text-sm">{errors.featured_videos[index]?.url?.message}</p>
-                                        )}
-                                    </div>
-                                ))}
-                                {videoFields.length < 9 ? (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => append({ url: "" })}
-                                        className="mt-2"
-                                    >
-                                        <Plus className="h-4 w-4 mr-2" /> Agregar otro video
-                                    </Button>
-                                ) : (
-                                    <p className="text-xs text-muted-foreground mt-2">
-                                        Has alcanzado el límite máximo de 9 videos.
-                                    </p>
-                                )}
+                                        </TabsTrigger>
+                                        <TabsTrigger value="instagram">
+                                            Instagram
+                                            {platformVideos.instagram.filter(u => u.trim()).length > 0 && (
+                                                <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">
+                                                    {platformVideos.instagram.filter(u => u.trim()).length}
+                                                </Badge>
+                                            )}
+                                        </TabsTrigger>
+                                        <TabsTrigger value="youtube">
+                                            YouTube
+                                            {platformVideos.youtube.filter(u => u.trim()).length > 0 && (
+                                                <Badge variant="secondary" className="ml-1.5 text-[10px] h-4 px-1">
+                                                    {platformVideos.youtube.filter(u => u.trim()).length}
+                                                </Badge>
+                                            )}
+                                        </TabsTrigger>
+                                    </TabsList>
+
+                                    {PLATFORMS.map((platform) => (
+                                        <TabsContent key={platform.key} value={platform.key} className="space-y-3">
+                                            {platformVideos[platform.key].map((url, index) => (
+                                                <div key={index} className="flex gap-2 items-center">
+                                                    <Input
+                                                        value={url}
+                                                        onChange={(e) => updateVideoUrl(platform.key, index, e.target.value)}
+                                                        placeholder={platform.placeholder}
+                                                        className="flex-1"
+                                                    />
+                                                    {platformVideos[platform.key].length > 1 && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                            onClick={() => removeVideoSlot(platform.key, index)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            {platformVideos[platform.key].length < platform.max && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => addVideoSlot(platform.key)}
+                                                    className="mt-2"
+                                                >
+                                                    <Plus className="h-4 w-4 mr-2" /> Agregar video
+                                                </Button>
+                                            )}
+                                            {platformVideos[platform.key].length >= platform.max && (
+                                                <p className="text-xs text-muted-foreground mt-2">
+                                                    Has alcanzado el máximo de {platform.max} videos para {platform.label}.
+                                                </p>
+                                            )}
+                                        </TabsContent>
+                                    ))}
+                                </Tabs>
                             </CardContent>
                         </Card>
 

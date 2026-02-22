@@ -21,8 +21,9 @@ import {
     CreditCard,
     Timer,
 } from "lucide-react";
-import { getDashboardOverview, getRecentExpenses } from "./actions";
+import { getDashboardOverview, getRecentExpenses, getGlobalPendingTasks } from "./actions";
 import { UpcomingDeadlines } from "@/components/dashboard/upcoming-deadlines";
+import { PendingTasksWidget } from "@/components/dashboard/pending-tasks-widget";
 
 function formatCurrency(amount: number) {
     return new Intl.NumberFormat("es-CO", {
@@ -71,6 +72,7 @@ const CATEGORY_ICONS: Record<string, any> = {
 export default async function DashboardPage() {
     const { data: overviewData, error: overviewError } = await getDashboardOverview();
     const recentExpenses = await getRecentExpenses();
+    const pendingTasks = await getGlobalPendingTasks();
 
     const activeCampaigns = overviewData?.activeCampaignsCount ?? 0;
     const monthlyRevenue = overviewData?.monthlyRevenue ?? 0;
@@ -294,9 +296,10 @@ export default async function DashboardPage() {
                 </Card>
             </div>
 
-            {/* Upcoming Deadlines (Full Width) */}
-            <div className="mt-6 w-full">
+            {/* Bottom Grid: Deadlines + Pending Tasks */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
                 <UpcomingDeadlines campaigns={allCampaigns} />
+                <PendingTasksWidget tasks={pendingTasks} />
             </div>
         </div>
     );
