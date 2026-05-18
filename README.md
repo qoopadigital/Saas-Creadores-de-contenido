@@ -55,11 +55,28 @@ CreatorOS es una plataforma integral diseñada para **creadores de contenido, in
 - **Separación Borradores vs. Favoritas**: organiza tus mejores ideas para acceder rápido.
 - **Creación manual** de ideas con título, descripción y plataforma destino.
 
-### 🎨 Perfil Público (Media Kit)
+### 📱 Media Kit Dinámico (Perfil Público)
 
-- **Link-in-Bio** personalizable con avatar, bio y username único.
-- **Embeds de video** (TikTok / Instagram Reels).
-- **Página de configuración** para actualizar datos en tiempo real.
+- **Landing Page profesional** para enviar a marcas y agencias — tu portafolio como creador.
+- **Videos organizados por plataforma** con pestañas interactivas: TikTok | Instagram | YouTube (máx. 6 por red).
+- **3 bloques de texto personalizables**: Texto Superior (presentación), Texto Intermedio (métricas/engagement) y Texto de Cierre (call-to-action).
+- **Link-in-Bio** con avatar, nombre, bio y username único.
+- **Iconos de RRSS** enlazados directamente a tus perfiles.
+- **Retrocompatibilidad** total con perfiles existentes.
+
+### 🌙 Modo Oscuro / Claro
+
+- **Toggle global** (☀️ Claro / 🌙 Oscuro / 💻 Sistema) accesible desde el Sidebar.
+- **Persistencia automática** — tu preferencia se guarda y aplica sin recargar.
+- **Variables CSS duales** (`:root` + `.dark`) con paleta Shadcn optimizada para ambos modos.
+- **Accesibilidad** garantizada: confort visual en largas jornadas de trabajo.
+
+### ✅ Centro de Mando (Dashboard)
+
+- **Widget "Tareas Pendientes"** — unifica los checklists de todas las campañas activas en una sola vista.
+- **Checkbox interactivo** con toggle optimista: marca una tarea como completada y desaparece al instante.
+- **Badge de campaña** en cada tarea para saber a qué proyecto pertenece.
+- **Estado vacío elegante**: "¡No hay tareas pendientes!" cuando todo está al día.
 
 ### 🔐 Seguridad
 
@@ -75,10 +92,12 @@ CreatorOS es una plataforma integral diseñada para **creadores de contenido, in
 | **Framework** | Next.js 16 (App Router, Server Actions, RSC) |
 | **Frontend** | React 19, TypeScript 5 |
 | **Estilos** | Tailwind CSS 4, Shadcn UI, Radix Primitives |
+| **Temas** | next-themes (Dark/Light/System) |
 | **Backend** | Supabase (PostgreSQL + Auth + RLS) |
 | **IA** | Google Generative AI (Gemini) |
 | **Visualización** | Recharts 3 |
 | **Gestión Kanban** | @hello-pangea/dnd |
+| **Embeds Sociales** | react-social-media-embed (TikTok, IG, YT) |
 | **Formularios** | React Hook Form + Zod |
 | **Notificaciones** | Sonner (Toasts) |
 
@@ -145,6 +164,9 @@ Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 - [x] Checklist interno por Campaña (To-Do)
 - [x] Banco de Ideas con generación IA
 - [x] Gastos Recientes unificados en Dashboard
+- [x] Media Kit Dinámico con videos por plataforma + textos
+- [x] Modo Oscuro / Claro global (next-themes)
+- [x] Widget de Tareas Pendientes en Dashboard
 - [ ] Almacenamiento de archivos (Subida de Avatares/Tickets)
 - [ ] Módulo de Agencia (Multi-talent management)
 - [ ] Notificaciones y alertas de deadlines

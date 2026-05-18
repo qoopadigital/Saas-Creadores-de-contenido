@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 import { createCampaign } from "@/app/(dashboard)/dashboard/campaigns/actions";
 import { ColorTagsInput } from "@/components/ui/color-tags-input";
+import { BrandCombobox } from "@/components/dashboard/brand-combobox";
 import type { Brand } from "@/types/database.types";
 
 import { Button } from "@/components/ui/button";
@@ -26,13 +27,6 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
 
 // ---- Schema ----
 const formSchema = z.object({
@@ -205,39 +199,22 @@ export function CreateCampaignDialog({ brands }: CreateCampaignDialogProps) {
                         )}
                     </div>
 
-                    {/* Brand Select */}
+                    {/* Brand Select (Combobox with inline creation) */}
                     <div className="space-y-2">
                         <Label>Marca *</Label>
                         <Controller
                             control={control}
                             name="brand_id"
                             render={({ field }) => (
-                                <Select
-                                    onValueChange={(val) => {
-                                        field.onChange(val);
-                                        const selected = brands.find(b => b.id === val);
-                                        if (selected) setValue("brand_name", selected.name);
+                                <BrandCombobox
+                                    brands={brands}
+                                    value={field.value}
+                                    onSelect={(brandId, brandName) => {
+                                        field.onChange(brandId);
+                                        setValue("brand_name", brandName);
                                     }}
-                                    defaultValue={field.value}
                                     disabled={isLoading}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Seleccionar marca..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {brands.length === 0 ? (
-                                            <SelectItem value="__empty" disabled>
-                                                No hay marcas — créalas en Directorio
-                                            </SelectItem>
-                                        ) : (
-                                            brands.map((brand) => (
-                                                <SelectItem key={brand.id} value={brand.id}>
-                                                    {brand.name}
-                                                </SelectItem>
-                                            ))
-                                        )}
-                                    </SelectContent>
-                                </Select>
+                                />
                             )}
                         />
                         {errors.brand_id && (

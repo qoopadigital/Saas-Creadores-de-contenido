@@ -24,6 +24,7 @@ import { ColorTagsInput } from "@/components/ui/color-tags-input";
 import type { CampaignData } from "./card";
 import type { Brand, Expense, CampaignTask } from "@/types/database.types";
 import { Checkbox } from "@/components/ui/checkbox";
+import { BrandCombobox } from "@/components/dashboard/brand-combobox";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -402,32 +403,15 @@ export function EditCampaignDialog({
                                         control={control}
                                         name="brand_id"
                                         render={({ field }) => (
-                                            <Select
-                                                onValueChange={(val) => {
-                                                    field.onChange(val);
-                                                    const selected = brands.find(b => b.id === val);
-                                                    if (selected) setValue("brand_name", selected.name);
-                                                }}
+                                            <BrandCombobox
+                                                brands={brands}
                                                 value={field.value}
+                                                onSelect={(brandId, brandName) => {
+                                                    field.onChange(brandId);
+                                                    setValue("brand_name", brandName);
+                                                }}
                                                 disabled={isLoading}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Seleccionar marca..." />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {brands.length === 0 ? (
-                                                        <SelectItem value="__empty" disabled>
-                                                            No hay marcas
-                                                        </SelectItem>
-                                                    ) : (
-                                                        brands.map((brand) => (
-                                                            <SelectItem key={brand.id} value={brand.id}>
-                                                                {brand.name}
-                                                            </SelectItem>
-                                                        ))
-                                                    )}
-                                                </SelectContent>
-                                            </Select>
+                                            />
                                         )}
                                     />
                                     {errors.brand_id && <p className="text-sm text-destructive">{errors.brand_id.message}</p>}
